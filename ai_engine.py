@@ -325,6 +325,7 @@ class AIEngine:
 
             tool_call_handled = False
             assistant_messages: list[str] = []
+            previous_message: Optional[str] = None
             pending_reasoning_queue: list[Dict[str, Any]] = []
 
             for item in getattr(response, "output", []) or []:
@@ -397,7 +398,9 @@ class AIEngine:
 
             manual_mutation = False
             for message in assistant_messages:
-                self.renderer.display_assistant_message(message)
+                if message != previous_message:
+                    self.renderer.display_assistant_message(message)
+                previous_message = message
                 for filename, content in self._detect_generated_files(message):
                     status = self._apply_file_update(
                         filename,
