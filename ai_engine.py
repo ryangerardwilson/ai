@@ -496,6 +496,8 @@ class AIEngine:
                 for msg in buffered_shell_messages:
                     conversation_items.append(self._make_user_message(msg))
                 buffered_shell_messages.clear()
+            for completion_msg in self.renderer.consume_completion_messages():
+                conversation_items.append(self._make_user_message(completion_msg))
             pending_user_message = (
                 "Follow-up instruction:\n"
                 + follow_up

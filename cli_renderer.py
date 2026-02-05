@@ -7,7 +7,12 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Iterable, Optional, List, Sequence
+
+try:  # Optional readline support for interactive prompts
+    import readline as _readline
+except ImportError:  # pragma: no cover - readline absent on some platforms
+    _readline = None
 
 
 class CLIRenderer:
@@ -23,6 +28,11 @@ class CLIRenderer:
         self._supports_color = sys.stdout.isatty()
         self._loader_thread: Optional[threading.Thread] = None
         self._loader_stop: Optional[threading.Event] = None
+        self._readline = _readline
+        self._readline_prompt: str = ""
+        self._completion_messages: List[str] = []
+        if self._readline:
+            self._setup_readline()
 
     # ------------------------------------------------------------------
     # Output helpers
@@ -107,6 +117,9 @@ class CLIRenderer:
         return value
 
     def prompt_follow_up(self) -> Optional[str]:
+        if self._readline:
+            self._readline_prompt = "QR > "
+        self._completion_messages.clear()
         try:
             return input("QR > ").strip()
         except KeyboardInterrupt:
@@ -115,6 +128,11 @@ class CLIRenderer:
         except EOFError:
             print()
             return None
+
+    def consume_completion_messages(self) -> list[str]:
+        messages = self._completion_messages[:]
+        self._completion_messages.clear()
+        return messages
 
     # ------------------------------------------------------------------
     # File review helpers
@@ -330,3 +348,97 @@ class CLIRenderer:
         self._loader_thread = None
         if self._supports_color:
             print("\033[?25h", end="", flush=True)
+
+    # ------------------------------------------------------------------
+    # Readline helpers
+    # ------------------------------------------------------------------
+    def _setup_readline(self) -> None:
+        assert self._readline is not None
+        self._readline.set_completer(self._readline_completer)
+        self._readline.set_completion_display_matches_hook(self._display_matches)  # type: ignore[arg-type]
+        try:
+            self._readline.parse_and_bind("tab: complete")
+            self._readline.parse_and_bind("set show-all-if-ambiguous On")
+            self._readline.parse_and_bind("set completion-ignore-case On")
+        except Exception:  # pragma: no cover - bindings may fail on some systems
+            pass
+
+    def _display_matches(self, substitution: str, matches: Sequence[str], longest: int) -> None:
+        if not matches:
+            return
+        prefix = getattr(self, "_last_completion_prefix", "")
+        rendered = [f"{prefix}{match}" if prefix else match for match in matches]
+        transcript = "Shell completions:\n" + "\n".join(rendered)
+        self._completion_messages.append(transcript)
+        print()
+        for match in rendered:
+            print(self._colorize(match, self.ANSI_MEDIUM_GRAY))
+        if self._readline_prompt and self._readline:
+            buffer = self._readline.get_line_buffer()
+            print(f"{self._readline_prompt}{buffer}", end="", flush=True)
+
+    def _readline_completer(self, text: str, state: int) -> Optional[str]:
+        if not self._readline:
+            return None
+        buffer = self._readline.get_line_buffer()
+        if not buffer.startswith("!"):
+            return None
+
+        candidates: list[str] = []
+
+        # Basic command suggestions
+        commands = ["ls", "pwd", "cat", "git", "tail", "head", "sed", "grep"]
+
+        stripped = buffer[1:]
+        # Determine current token
+        begidx = self._readline.get_begidx()
+        endidx = self._readline.get_endidx()
+        fragment = buffer[begidx:endidx]
+
+        if begidx <= 1:
+            candidates.extend(cmd for cmd in commands if cmd.startswith(text))
+
+        path_fragment = fragment or ""
+        token_start = begidx
+        while token_start > 0 and not buffer[token_start - 1].isspace():
+            token_start -= 1
+        token_original = buffer[token_start:endidx]
+        if token_original.startswith("!"):
+            token_original = token_original[1:]
+
+        prefix_typed = token_original[: len(token_original) - len(path_fragment)] if len(token_original) >= len(path_fragment) else ""
+        if prefix_typed.startswith("!"):
+            prefix_typed = prefix_typed[1:]
+
+        typed_path = prefix_typed + path_fragment
+
+        expanded_path = os.path.expanduser(typed_path) if typed_path else os.path.expanduser(".")
+        if not typed_path or typed_path.endswith(os.path.sep):
+            directory = expanded_path or os.path.expanduser(".")
+            display_prefix = typed_path
+            partial = ""
+        else:
+            directory = os.path.dirname(expanded_path) or os.path.expanduser(".")
+            display_prefix = prefix_typed
+            partial = os.path.basename(expanded_path)
+
+        self._last_completion_prefix = display_prefix or ""
+
+        try:
+            entries = sorted(os.listdir(directory))
+        except OSError:
+            entries = []
+
+        for entry in entries:
+            if partial and not entry.startswith(partial):
+                continue
+            candidate = entry
+            full_path = os.path.join(directory, entry)
+            if os.path.isdir(full_path):
+                candidate = candidate.rstrip(os.path.sep) + "/"
+            candidates.append(candidate)
+
+        candidates = sorted(set(candidates))
+        if state < len(candidates):
+            return candidates[state]
+        return None
