@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 from config_paths import get_config_path
+from contextualizer import DEFAULT_READ_LIMIT, MAX_READ_BYTES
 
 DEFAULT_SYSTEM_PROMPT = (
     "Channel a blunt, no-nonsense, technically brutal critique style"
@@ -30,11 +31,17 @@ DEFAULT_BASH_SETTINGS: Dict[str, Any] = {
     "max_iterations": 6,
 }
 
+DEFAULT_CONTEXT_SETTINGS: Dict[str, Any] = {
+    "read_limit": DEFAULT_READ_LIMIT,
+    "max_bytes": MAX_READ_BYTES,
+}
+
 DEFAULTS: Dict[str, Any] = {
     "openai_api_key": "",
     "models": DEFAULT_MODELS.copy(),
     "system_instruction": DEFAULT_SYSTEM_PROMPT,
     "bash_settings": DEFAULT_BASH_SETTINGS.copy(),
+    "context_settings": DEFAULT_CONTEXT_SETTINGS.copy(),
 }
 
 
@@ -57,6 +64,10 @@ def load_config() -> Dict[str, Any]:
     bash_entry = data.get("bash_settings")
     bash_settings_from_file = bash_entry if isinstance(bash_entry, dict) else {}
     cfg["bash_settings"] = {**dict(DEFAULT_BASH_SETTINGS), **bash_settings_from_file}
+
+    context_entry = data.get("context_settings")
+    context_settings_from_file = context_entry if isinstance(context_entry, dict) else {}
+    cfg["context_settings"] = {**dict(DEFAULT_CONTEXT_SETTINGS), **context_settings_from_file}
 
     env_key = os.environ.get("OPENAI_API_KEY")
     if env_key:
@@ -87,6 +98,14 @@ def load_config() -> Dict[str, Any]:
     if env_bash_iters and env_bash_iters.isdigit():
         cfg["bash_settings"]["max_iterations"] = int(env_bash_iters)
 
+    env_context_limit = os.environ.get("AI_CONTEXT_READ_LIMIT")
+    if env_context_limit and env_context_limit.isdigit():
+        cfg["context_settings"]["read_limit"] = int(env_context_limit)
+
+    env_context_bytes = os.environ.get("AI_CONTEXT_MAX_BYTES")
+    if env_context_bytes and env_context_bytes.isdigit():
+        cfg["context_settings"]["max_bytes"] = int(env_context_bytes)
+
     return cfg
 
 
@@ -103,4 +122,5 @@ __all__ = [
     "DEFAULT_MODELS",
     "DEFAULT_SYSTEM_PROMPT",
     "DEFAULT_BASH_SETTINGS",
+    "DEFAULT_CONTEXT_SETTINGS",
 ]

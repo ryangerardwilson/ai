@@ -39,6 +39,10 @@ from contextualizer import (
     collect_context,
     format_context_for_display,
     format_context_for_prompt,
+    format_file_slice_for_prompt,
+    read_file_slice,
+    DEFAULT_READ_LIMIT,
+    MAX_READ_BYTES,
 )
 
 INSTALL_SH_URL = "https://raw.githubusercontent.com/ryangerardwilson/ai/main/install.sh"
@@ -502,6 +506,30 @@ def parse_args(argv):
         description="Codex-style terminal assistant"
     )
     parser.add_argument(
+        "--read",
+        metavar="PATH",
+        help="Preview a file slice instead of starting a conversation",
+    )
+    parser.add_argument(
+        "--offset",
+        type=int,
+        default=None,
+        help="0-based line offset for --read (default: 0)",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Number of lines to read with --read",
+    )
+    parser.add_argument(
+        "--max-bytes",
+        dest="max_bytes",
+        type=int,
+        default=None,
+        help="Maximum bytes to load with --read",
+    )
+    parser.add_argument(
         "scope_or_prompt",
         nargs="?",
         help="Optional file/directory scope or the beginning of the prompt",
@@ -512,6 +540,50 @@ def parse_args(argv):
         help="Additional prompt words",
     )
     return parser.parse_args(argv)
+
+
+def _show_file_slice(
+    path_str: str,
+    *,
+    offset: int | None,
+    limit: int | None,
+    max_bytes: int | None,
+    defaults: Dict[str, int],
+) -> int:
+    target = Path(path_str).expanduser()
+    if not target.is_absolute():
+        target = (Path.cwd() / target).resolve()
+    else:
+        target = target.resolve()
+
+    if not target.exists():
+        print(f"File not found: {target}", file=sys.stderr)
+        return 1
+
+    if target.is_dir():
+        print(f"{target} is a directory. Use --read with files only.", file=sys.stderr)
+        return 1
+
+    safe_offset = max(0, offset or 0)
+    safe_limit = max(1, (limit or defaults.get("limit", DEFAULT_READ_LIMIT)))
+    safe_bytes = max(1, (max_bytes or defaults.get("max_bytes", MAX_READ_BYTES)))
+
+    file_slice = read_file_slice(target, offset=safe_offset, limit=safe_limit, max_bytes=safe_bytes)
+    rel_root = Path.cwd().resolve()
+    print(format_file_slice_for_prompt(file_slice, rel_root=rel_root))
+
+    if file_slice.truncated:
+        try:
+            rel_target = target.relative_to(rel_root)
+        except ValueError:
+            rel_target = target
+        next_offset = file_slice.last_line_read
+        print(
+            "\nTo continue reading: "
+            f"ai --read {rel_target} --offset {next_offset} --limit {safe_limit}"
+        )
+
+    return 0
 
 
 def strip_code_fence(raw_response):
@@ -1189,6 +1261,9 @@ def run_codex_conversation(prompt: str, scope: str | None, config: Dict[str, Any
         return 1
 
     repo_root = Path.cwd().resolve()
+    context_settings = config.get("context_settings", {})
+    context_max_bytes = int(context_settings.get("max_bytes", MAX_READ_BYTES))
+    context_default_limit = int(context_settings.get("read_limit", DEFAULT_READ_LIMIT))
     try:
         _, scope_root, scope_label = _resolve_scope(scope, repo_root)
     except FileNotFoundError as exc:
@@ -1198,12 +1273,27 @@ def run_codex_conversation(prompt: str, scope: str | None, config: Dict[str, Any
         print(str(exc), file=sys.stderr)
         return 1
 
-    collected = collect_context(scope_root)
+    collected = collect_context(
+        scope_root,
+        limit_bytes=context_max_bytes,
+        default_limit=context_default_limit,
+    )
     display_text = format_context_for_display(collected)
     prompt_context = format_context_for_prompt(collected)
 
     print("# Collected Context")
     print(display_text)
+    truncated_examples = [item for item in collected.files if item.truncated]
+    if truncated_examples:
+        example = truncated_examples[0]
+        try:
+            example_path = example.path.relative_to(repo_root)
+        except ValueError:
+            example_path = example.path
+        print(
+            "\nTip: Use --read to inspect more lines, e.g., "
+            f"ai --read {example_path} --offset {example.last_line_read}"
+        )
 
     model = resolve_model("bash", config)
     api_key_value = resolve_api_key(config=config)
@@ -1243,7 +1333,11 @@ def run_codex_conversation(prompt: str, scope: str | None, config: Dict[str, Any
 
     while True:
         if context_dirty:
-            collected = collect_context(scope_root)
+            collected = collect_context(
+                scope_root,
+                limit_bytes=context_max_bytes,
+                default_limit=context_default_limit,
+            )
             prompt_context = format_context_for_prompt(collected)
             pending_context_update = prompt_context
             context_dirty = False
@@ -1442,6 +1536,20 @@ def main(argv=None):
     config = load_config()
 
     args = parse_args(arg_list)
+
+    context_defaults = config.get("context_settings", {})
+
+    if args.read:
+        return _show_file_slice(
+            args.read,
+            offset=args.offset,
+            limit=args.limit,
+            max_bytes=args.max_bytes,
+            defaults={
+                "limit": int(context_defaults.get("read_limit", DEFAULT_READ_LIMIT)),
+                "max_bytes": int(context_defaults.get("max_bytes", MAX_READ_BYTES)),
+            },
+        )
 
     scope_candidate = args.scope_or_prompt
     prompt_components = list(args.prompt)
