@@ -38,6 +38,15 @@ COLOR_RESET = "\033[0m"
 DEFAULT_COLOR = "\033[1;36m"
 
 PRIMARY_FLAG_SET = {"-h", "--help", "-v", "--version", "-V", "-u", "--upgrade"}
+RESPONSES_ONLY_MODELS = {
+    "gpt-5-codex",
+    "gpt-5.1-codex",
+    "gpt-5.1-codex-mini",
+}
+
+
+def _is_responses_model(model: str) -> bool:
+    return model in RESPONSES_ONLY_MODELS
 
 
 def _print_help() -> None:
@@ -470,6 +479,54 @@ def add_line_numbers_to_diff(diff_lines):
     return "\n".join(numbered)
 
 
+def _coalesce_responses_text(response: Any) -> str:
+    if response is None:
+        return ""
+
+    if hasattr(response, "output_text"):
+        text = getattr(response, "output_text")
+        if isinstance(text, str) and text.strip():
+            return text
+
+    if hasattr(response, "model_dump"):
+        data = response.model_dump()
+    elif hasattr(response, "dict"):
+        data = response.dict()
+    else:
+        data = response
+
+    def _from_output(obj: Any) -> str:
+        content_chunks: list[str] = []
+        if isinstance(obj, dict):
+            output = obj.get("output") or obj.get("choices") or obj.get("content")
+            if isinstance(output, list):
+                for item in output:
+                    text = _from_output(item)
+                    if text:
+                        content_chunks.append(text)
+            elif isinstance(output, dict):
+                text = _from_output(output)
+                if text:
+                    content_chunks.append(text)
+
+            text_value = obj.get("text")
+            if isinstance(text_value, str):
+                content_chunks.append(text_value)
+
+            return "".join(content_chunks)
+
+        if isinstance(obj, list):
+            parts = [text for item in obj if (text := _from_output(item))]
+            return "".join(parts)
+
+        if isinstance(obj, str):
+            return obj
+
+        return ""
+
+    return _from_output(data).strip()
+
+
 def handle_edit_mode(
     path_str: str,
     instruction: str,
@@ -509,15 +566,29 @@ def handle_edit_mode(
     )
 
     stop_event, loader_thread = start_loader()
+    content = ""
 
     try:
-        response = client.chat.completions.create(  # type: ignore[arg-type]
-            model=effective_model,
-            messages=[  # type: ignore[arg-type]
-                {"role": "system", "content": system_message},
-                {"role": "user", "content": user_message},
-            ],
-        )
+        if _is_responses_model(effective_model):
+            response = client.responses.create(  # type: ignore[arg-type]
+                model=effective_model,
+                input=f"{system_message}\n\n{user_message}",
+            )
+            content = _coalesce_responses_text(response)
+        else:
+            chat_response = client.chat.completions.create(  # type: ignore[arg-type]
+                model=effective_model,
+                messages=[  # type: ignore[arg-type]
+                    {"role": "system", "content": system_message},
+                    {"role": "user", "content": user_message},
+                ],
+            )
+            if not chat_response.choices:
+                content = ""
+            else:
+                choice = chat_response.choices[0]
+                content_obj = getattr(choice.message, "content", None)
+                content = content_obj if isinstance(content_obj, str) else ""
     except Exception as exc:
         print(f"Error: {exc}. The API tripped over itself.")
         return 1
@@ -529,12 +600,6 @@ def handle_edit_mode(
         elif stop_event:
             stop_event.set()
 
-    if not response.choices:
-        print("No response from the model. Try again later.")
-        return 1
-
-    choice = response.choices[0]
-    content = getattr(choice.message, "content", None)
     if not content:
         print("Model returned no content. Aborting.")
         return 1
