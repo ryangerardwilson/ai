@@ -14,7 +14,7 @@ class CLIRenderer:
     """Console renderer for the ai CLI."""
 
     ANSI_WHITE = "\033[97m"
-    ANSI_MEDIUM_GRAY = "\033[38;5;250m"
+    ANSI_MEDIUM_GRAY = "\033[38;5;248m"
     ANSI_DIM_GRAY = "\033[90m"
     ANSI_RESET = "\033[0m"
 
@@ -44,7 +44,8 @@ class CLIRenderer:
 
     def display_assistant_message(self, text: str) -> None:
         if text:
-            print(self._colorize(text, self.ANSI_MEDIUM_GRAY))
+            prefix = "🤖 > "
+            print(self._colorize(prefix + text, self.ANSI_MEDIUM_GRAY))
 
     def display_shell_output(self, text: str) -> None:
         if text:
@@ -86,7 +87,7 @@ class CLIRenderer:
 
     def prompt_follow_up(self) -> Optional[str]:
         try:
-            return input("follow_up >>> ").strip()
+            return input("QR > ").strip()
         except KeyboardInterrupt:
             print("\nInterrupted by user.")
             return None

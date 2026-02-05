@@ -11,9 +11,10 @@
 - **Minimal footprint** – Depend on the OpenAI Python client plus standard library functionality; keep binaries portable through PyInstaller packaging. ([requirements.txt](requirements.txt), [README.md](README.md))
 
 ## 3. Primary Workflows
-| Flow | Invocation Example | Description | Key Sources | | --- | --- | --- |
---- | | Interactive conversation | `ai` | Analyze the current repository,
-stream answers, and accept iterative `follow_up >>>` prompts. |
+| Flow | Invocation Example | Description | Key Sources |
+| --- | --- | --- | --- |
+| Interactive conversation | `ai` | Analyze the current repository,
+stream answers, and accept iterative `QR >` prompts. |
 [README.md](README.md), [main.py](main.py) | | Prompt-only run | `ai "how do I
 write a release workflow?"` | Execute a single inference without entering
 follow-up mode. | [README.md](README.md), [main.py](main.py) | | File rewrite

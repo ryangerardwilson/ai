@@ -46,7 +46,7 @@ python main.py
 
 ## Usage
 
-- `ai` — analyze the current repository and start an interactive Q&A conversation (use the `follow_up >>>` prompt to continue, or press Enter to finish).
+- `ai` — analyze the current repository and start an interactive Q&A conversation (use the `QR >` prompt to continue, or press Enter to finish).
 - `ai "how do I write a release workflow?"` — run a one-off prompt; the assistant answers once and exits.
 - `ai path/to/file.py "replace legacy API usage"` — review the proposed diff for that file and confirm (or supply more context to retry).
 - `ai "what is the objective of this repo"` — summarize the repository snapshot and cite relevant files.
@@ -58,7 +58,9 @@ python main.py
 - `ai -u` — rerun the installer script if a newer release exists.
 - `ai -h` — show the CLI help summary.
 
-Each response streams live to your terminal, followed by the `follow_up >>>`
+Each response streams live to your terminal, followed by the `QR >` prompt so you can iterate. Editing mode (triggered by a file scope or a
+conversation-generated file) shows a unified diff and preserves permissions
+when you approve the change.
 prompt so you can iterate. Editing mode (triggered by a file scope or a
 conversation-generated file) shows a unified diff and preserves permissions
 when you approve the change.
