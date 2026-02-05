@@ -34,7 +34,8 @@ hosted installer script. | [README.md](README.md), [main.py](main.py),
 [install.sh](install.sh) |
 
 ## 4. Architectural Components
-- **CLI orchestrator** – Parses arguments, routes between prompt, chat, edit, read, and upgrade paths, manages OpenAI Responses sessions, and renders annotated diffs. ([main.py](main.py))
+- **CLI entrypoint** – Parses arguments, handles upgrade/help flags, wires the CLI renderer, and delegates orchestration to the shared engine. ([main.py](main.py), [cli_renderer.py](cli_renderer.py))
+- **AI engine** – Core orchestration layer that gathers context, manages the Responses loop, dispatches tools, and applies mutations via the injected renderer. ([ai_engine.py](ai_engine.py))
 - **Context harvesting** – Collects representative file snippets, enforces byte/line caps, and formats content for prompt injection. ([contextualizer.py](contextualizer.py))
 - **Sandboxed execution layer** – Validates bash commands against disallowed patterns, enforces repo-relative execution, and truncates oversized output. ([bash_executor.py](bash_executor.py))
 - **Configuration loader** – Resolves XDG-aware config files, merges defaults, and applies environment overrides for the shared model, bash settings, and context limits. ([config_loader.py](config_loader.py), [config_paths.py](config_paths.py))

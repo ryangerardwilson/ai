@@ -124,3 +124,5 @@ GitHub Actions builds a PyInstaller bundle (`ai-linux-x64.tar.gz`), updates
 - Requirements live in `requirements.txt`.
 - `_version.py` carries the runtime version string; the release workflow overwrites it during tagged builds.
 - Run `python main.py -h` to view the CLI summary from source.
+- `ai_engine.py` hosts the core orchestration (context gathering, tool dispatch, Responses loop) and can be reused by future UIs.
+- `cli_renderer.py` implements the current terminal UX; alternative renderers (TUI, GUI) can plug into the same engine.
