@@ -37,7 +37,6 @@ from bash_executor import (
 )
 from contextualizer import (
     collect_context,
-    format_context_for_display,
     format_context_for_prompt,
     format_file_slice_for_prompt,
     read_file_slice,
@@ -937,8 +936,6 @@ def _handle_tool_call(
         return f"error: invalid arguments JSON ({exc})", False
 
     mutated = False
-    if tool_name in {"write", "write_file"}:
-        print(f"[tool-call] {tool_name}: parsed args={args}")
 
     if tool_name == "read_file":
         path_arg = args.get("path")
@@ -963,7 +960,6 @@ def _handle_tool_call(
 
         snippet = data[offset : offset + limit]
         preview = f"Contents of {path.relative_to(base_root)}\n```\n{snippet}\n```"
-        print(preview)
         return preview, False
 
     if tool_name in {"write", "write_file"}:
@@ -993,12 +989,9 @@ def _handle_tool_call(
                 status_message = f"success: wrote {relative}"
             except Exception:
                 status_message = "success: wrote file"
-            print(f"[tool-call] {tool_name}: wrote file -> {status_message}")
             return status_message, mutated
         if status == "no_change":
-            print(f"[tool-call] {tool_name}: no change for {path_arg}")
             return "no change", mutated
-        print(f"[tool-call] {tool_name}: status={status}")
         return status, mutated
 
     if tool_name == "apply_patch":
@@ -1094,7 +1087,6 @@ def _handle_tool_call(
             response += f"; notes: {explanation}"
         return response, False
 
-    print(f"[tool-call] unknown tool '{tool_name}' with args={args}")
     return f"error: unknown tool '{tool_name}'", False
 
 
@@ -1280,23 +1272,7 @@ def run_codex_conversation(prompt: str, scope: str | None, config: Dict[str, Any
         default_limit=context_default_limit,
         include_listing=include_listing,
     )
-    display_text = format_context_for_display(collected)
     prompt_context = format_context_for_prompt(collected)
-
-    print("# Collected Context")
-    print(display_text)
-    truncated_examples = [item for item in collected.files if item.truncated]
-    if truncated_examples:
-        example = truncated_examples[0]
-        try:
-            example_path = example.path.relative_to(repo_root)
-        except ValueError:
-            example_path = example.path
-        print(
-            "\nTip: Use --read to inspect more lines, e.g., "
-            f"ai --read {example_path} --offset {example.last_line_read}"
-        )
-
     model = resolve_model("bash", config)
     api_key_value = resolve_api_key(config=config)
     client = openai.OpenAI(api_key=api_key_value)
@@ -1378,23 +1354,9 @@ def run_codex_conversation(prompt: str, scope: str | None, config: Dict[str, Any
 
         for item in getattr(response, "output", []) or []:
             item_type = getattr(item, "type", "")
-            debug_payload = {
-                "type": item_type,
-                "id": getattr(item, "id", None),
-                "call_id": getattr(item, "call_id", None),
-                "name": getattr(item, "name", None),
-            }
-            reasoning_ref = getattr(item, "reasoning_id", None)
-            if reasoning_ref:
-                debug_payload["reasoning_id"] = reasoning_ref
-            try:
-                print("[debug] response item " + json.dumps(debug_payload, default=str))
-            except Exception:
-                print(f"[debug] response item type={item_type}")
 
             if item_type == "message":
                 if pending_reasoning_queue:
-                    print(f"[debug] flushing {len(pending_reasoning_queue)} reasoning items before message")
                     while pending_reasoning_queue:
                         conversation_items.append(pending_reasoning_queue.pop(0))
                 text_parts: list[str] = []
@@ -1407,10 +1369,6 @@ def run_codex_conversation(prompt: str, scope: str | None, config: Dict[str, Any
                     conversation_items.append(_make_assistant_message(text))
             elif item_type in {"tool_call", "function_call"}:
                 item_payload = _convert_response_item(item)
-                try:
-                    print("[debug] function_call payload " + json.dumps(item_payload, indent=2))
-                except Exception:
-                    print(f"[debug] function_call payload keys={list(item_payload.keys())}")
                 raw_item_id = getattr(item, "id", None)
                 raw_call_id = getattr(item, "call_id", None) or raw_item_id
                 tool_name = getattr(item, "name", "")
@@ -1422,13 +1380,9 @@ def run_codex_conversation(prompt: str, scope: str | None, config: Dict[str, Any
                     for idx, pending in enumerate(pending_reasoning_queue):
                         if pending.get("id") == reasoning_id:
                             selected_reasoning = pending_reasoning_queue.pop(idx)
-                            print(f"[debug] attaching reasoning {reasoning_id} to call {call_id}")
                             break
                 if selected_reasoning is None and pending_reasoning_queue:
                     selected_reasoning = pending_reasoning_queue.pop(0)
-                    print(
-                        f"[debug] attaching inferred reasoning {selected_reasoning.get('id')} to call {call_id}"
-                    )
                 if selected_reasoning:
                     conversation_items.append(selected_reasoning)
                 conversation_items.append(
@@ -1467,7 +1421,6 @@ def run_codex_conversation(prompt: str, scope: str | None, config: Dict[str, Any
                 else:
                     sanitized = _sanitize_reasoning_item(reasoning_payload)
                     pending_reasoning_queue.append(sanitized)
-                    print(f"[debug] queued reasoning {sanitized.get('id')}")
                 summary = getattr(item, "summary", None)
                 if summary:
                     reasoning_text = getattr(summary, "text", "") if hasattr(summary, "text") else summary
@@ -1475,7 +1428,6 @@ def run_codex_conversation(prompt: str, scope: str | None, config: Dict[str, Any
                         print(f"# Reasoning\n{reasoning_text}\n")
 
         if pending_reasoning_queue and not tool_call_handled:
-            print(f"[debug] flushing {len(pending_reasoning_queue)} remaining reasoning items post-loop")
             while pending_reasoning_queue:
                 conversation_items.append(pending_reasoning_queue.pop(0))
 
