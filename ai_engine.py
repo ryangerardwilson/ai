@@ -7,14 +7,13 @@ import shlex
 import subprocess
 import textwrap
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Protocol, cast
+from typing import Any, Dict, List, Optional, Protocol, cast
 
 import openai
 
 from contextualizer import (
     collect_context,
     format_context_for_prompt,
-    read_file_slice,
     DEFAULT_READ_LIMIT,
     MAX_READ_BYTES,
 )
@@ -136,23 +135,17 @@ TOOL_DEFINITIONS = [
 
 
 class RendererProtocol(Protocol):
-    def display_info(self, text: str) -> None:
-        ...
+    def display_info(self, text: str) -> None: ...
 
-    def display_error(self, text: str) -> None:
-        ...
+    def display_error(self, text: str) -> None: ...
 
-    def display_assistant_message(self, text: str) -> None:
-        ...
+    def display_assistant_message(self, text: str) -> None: ...
 
-    def display_reasoning(self, text: str) -> None:
-        ...
+    def display_reasoning(self, text: str) -> None: ...
 
-    def display_shell_output(self, text: str) -> None:
-        ...
+    def display_shell_output(self, text: str) -> None: ...
 
-    def display_plan_update(self, plan: str, explanation: Optional[str]) -> None:
-        ...
+    def display_plan_update(self, plan: str, explanation: Optional[str]) -> None: ...
 
     def review_file_update(
         self,
@@ -162,26 +155,22 @@ class RendererProtocol(Protocol):
         new_text: str,
         *,
         auto_apply: bool = False,
-    ) -> str:
-        ...
+    ) -> str: ...
 
-    def prompt_text(self, prompt: str) -> Optional[str]:
-        ...
+    def prompt_text(self, prompt: str) -> Optional[str]: ...
 
-    def prompt_follow_up(self) -> Optional[str]:
-        ...
+    def prompt_follow_up(self) -> Optional[str]: ...
 
-    def prompt_confirm(self, prompt: str, *, default_no: bool = True) -> bool:
-        ...
+    def prompt_confirm(self, prompt: str, *, default_no: bool = True) -> bool: ...
 
-    def start_loader(self) -> tuple[Optional[object], Optional[object]]:
-        ...
+    def start_loader(self) -> tuple[Optional[object], Optional[object]]: ...
 
-    def stop_loader(self) -> None:
-        ...
+    def stop_loader(self) -> None: ...
 
 
-def resolve_api_key(candidate: str | None = None, config: Optional[Dict[str, Any]] = None) -> str:
+def resolve_api_key(
+    candidate: str | None = None, config: Optional[Dict[str, Any]] = None
+) -> str:
     if candidate:
         return candidate
     if config:
@@ -233,7 +222,9 @@ class AIEngine:
         repo_root = Path.cwd().resolve()
         context_settings = self.config.get("context_settings", {})
         context_max_bytes = int(context_settings.get("max_bytes", MAX_READ_BYTES))
-        context_default_limit = int(context_settings.get("read_limit", DEFAULT_READ_LIMIT))
+        context_default_limit = int(
+            context_settings.get("read_limit", DEFAULT_READ_LIMIT)
+        )
         include_listing = bool(context_settings.get("include_listing", False))
 
         try:
@@ -253,7 +244,9 @@ class AIEngine:
         )
         prompt_context = format_context_for_prompt(collected)
 
-        model_id = resolve_model("conversation", self.config, default_model=self.default_model)
+        model_id = resolve_model(
+            "conversation", self.config, default_model=self.default_model
+        )
 
         scope_sentence = (
             "Focus on the entire repository."
@@ -308,7 +301,9 @@ class AIEngine:
 
             if pending_context_update:
                 conversation_items.append(
-                    self._make_user_message("Updated repository snapshot:\n" + pending_context_update)
+                    self._make_user_message(
+                        "Updated repository snapshot:\n" + pending_context_update
+                    )
                 )
                 pending_context_update = None
 
@@ -356,7 +351,9 @@ class AIEngine:
                         pending_reasoning_queue.clear()
                         if text:
                             assistant_messages.append(text)
-                            conversation_items.append(self._make_assistant_message(text))
+                            conversation_items.append(
+                                self._make_assistant_message(text)
+                            )
 
                     elif item_type in {"tool_call", "function_call"}:
                         item_payload = self._convert_response_item(item)
@@ -383,7 +380,9 @@ class AIEngine:
                             plan_state=plan_state,
                             latest_instruction=latest_instruction,
                         )
-                        conversation_items.append(self._make_tool_result_message(call_id, result_text))
+                        conversation_items.append(
+                            self._make_tool_result_message(call_id, result_text)
+                        )
                         if mutated:
                             context_dirty = True
                         tool_call_handled = True
@@ -393,7 +392,8 @@ class AIEngine:
                         sanitized = {
                             key: value
                             for key, value in reasoning_payload.items()
-                            if key in {"type", "id", "summary", "content"} and value is not None
+                            if key in {"type", "id", "summary", "content"}
+                            and value is not None
                         }
                         sanitized.setdefault("type", "reasoning")
                         pending_reasoning_queue.append(sanitized)
@@ -439,13 +439,13 @@ class AIEngine:
             if assistant_messages and not manual_mutation:
                 if not warned_no_write and any(
                     re.search(
-                        r"\b(created|saved|written|added|generated)\b", msg, re.IGNORECASE
+                        r"\b(created|saved|written|added|generated)\b",
+                        msg,
+                        re.IGNORECASE,
                     )
                     for msg in assistant_messages
                 ):
-                    pending_user_message = (
-                        "It appears no files changed. Please call the `write` tool (alias: `write_file`) with the full contents so the file can be created."
-                    )
+                    pending_user_message = "It appears no files changed. Please call the `write` tool (alias: `write_file`) with the full contents so the file can be created."
                     warned_no_write = True
                     continue
 
@@ -512,7 +512,9 @@ class AIEngine:
     ) -> int:
         target_path = Path(path).expanduser()
         if target_path.is_dir():
-            self.renderer.display_info(f"{target_path} is a directory, not a file. Try harder.")
+            self.renderer.display_info(
+                f"{target_path} is a directory, not a file. Try harder."
+            )
             return 1
 
         try:
@@ -526,7 +528,9 @@ class AIEngine:
             self.renderer.display_error(f"Couldn't read {target_path}: {exc}")
             return 1
 
-        effective_model = resolve_model("edit", self.config, model_override, self.default_model)
+        effective_model = resolve_model(
+            "edit", self.config, model_override, self.default_model
+        )
         system_message = (
             "You rewrite files. Return only the complete updated file content. "
             "No explanations, no code fences, no commentary."
@@ -573,13 +577,21 @@ class AIEngine:
 
         proposed_text = self._strip_code_fence(content)
         if proposed_text == "":
-            self.renderer.display_info("Model returned empty content. Not touching your file.")
+            self.renderer.display_info(
+                "Model returned empty content. Not touching your file."
+            )
             return 1
         if proposed_text == current_text:
-            self.renderer.display_info("Model produced identical content. Nothing to do.")
+            self.renderer.display_info(
+                "Model produced identical content. Nothing to do."
+            )
             return 0
 
-        display_path = target_path.relative_to(Path.cwd()) if target_path.is_absolute() else target_path
+        display_path = (
+            target_path.relative_to(Path.cwd())
+            if target_path.is_absolute()
+            else target_path
+        )
         status = self.renderer.review_file_update(
             target_path=target_path,
             display_path=display_path,
@@ -591,10 +603,10 @@ class AIEngine:
         if status == "user_rejected":
             extra = self.renderer.prompt_text("add_context >>> ")
             if extra:
-                combined_instruction = (
-                    f"{instruction}\n\nAdditional context provided after review:\n{extra}"
+                combined_instruction = f"{instruction}\n\nAdditional context provided after review:\n{extra}"
+                return self.run_edit(
+                    path, combined_instruction, model_override=model_override
                 )
-                return self.run_edit(path, combined_instruction, model_override=model_override)
             return 0
         if status.startswith("error"):
             self.renderer.display_error(status)
@@ -610,7 +622,11 @@ class AIEngine:
             return repo_root, "repository root"
 
         candidate = Path(scope).expanduser()
-        candidate = (repo_root / candidate).resolve() if not candidate.is_absolute() else candidate.resolve()
+        candidate = (
+            (repo_root / candidate).resolve()
+            if not candidate.is_absolute()
+            else candidate.resolve()
+        )
 
         try:
             candidate.relative_to(repo_root)
@@ -636,12 +652,18 @@ class AIEngine:
         auto_apply: bool,
     ) -> str:
         path = Path(filename)
-        path = (default_root / path).resolve() if not path.is_absolute() else path.resolve()
+        path = (
+            (default_root / path).resolve()
+            if not path.is_absolute()
+            else path.resolve()
+        )
 
         try:
             relative = path.relative_to(base_root)
         except ValueError:
-            self.renderer.display_info(f"[skip] refusing to modify outside project root: {path}")
+            self.renderer.display_info(
+                f"[skip] refusing to modify outside project root: {path}"
+            )
             return "skipped_out_of_scope"
 
         try:
@@ -679,7 +701,11 @@ class AIEngine:
             if not path_arg:
                 return "error: missing path", False
             path = Path(path_arg)
-            path = (default_root / path).resolve() if not path.is_absolute() else path.resolve()
+            path = (
+                (default_root / path).resolve()
+                if not path.is_absolute()
+                else path.resolve()
+            )
             try:
                 path.relative_to(base_root)
             except ValueError:
@@ -718,7 +744,9 @@ class AIEngine:
             if not patch_text:
                 return "error: missing patch", False
             self.renderer.display_info("# apply_patch proposal\n" + patch_text)
-            if not self.renderer.prompt_confirm("Apply patch? [y/N]: ", default_no=True):
+            if not self.renderer.prompt_confirm(
+                "Apply patch? [y/N]: ", default_no=True
+            ):
                 return "user_rejected", False
             try:
                 proc = subprocess.run(
@@ -777,7 +805,11 @@ class AIEngine:
 
         workdir_arg = args.get("workdir")
         workdir = Path(workdir_arg).expanduser() if workdir_arg else default_root
-        workdir = (default_root / workdir).resolve() if not workdir.is_absolute() else workdir.resolve()
+        workdir = (
+            (default_root / workdir).resolve()
+            if not workdir.is_absolute()
+            else workdir.resolve()
+        )
         try:
             workdir.relative_to(base_root)
         except ValueError:
@@ -788,7 +820,9 @@ class AIEngine:
         except (TypeError, ValueError):
             timeout_seconds = 15
         try:
-            max_output_bytes = max(1, int(os.environ.get("AI_BASH_MAX_OUTPUT", "20000")))
+            max_output_bytes = max(
+                1, int(os.environ.get("AI_BASH_MAX_OUTPUT", "20000"))
+            )
         except (TypeError, ValueError):
             max_output_bytes = 20000
 
@@ -920,7 +954,9 @@ class AIEngine:
         data = self._to_plain_data(obj)
         if isinstance(data, dict):
             return data
-        raise TypeError(f"Unable to convert response item of type {type(obj)!r} to dict")
+        raise TypeError(
+            f"Unable to convert response item of type {type(obj)!r} to dict"
+        )
 
     def _to_plain_data(self, obj: Any) -> Any:
         if isinstance(obj, (str, int, float, bool)) or obj is None:

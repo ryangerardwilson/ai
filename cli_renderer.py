@@ -55,7 +55,11 @@ class CLIRenderer:
         if plan:
             print(self._colorize("# Updated Plan\n" + plan, self.ANSI_MEDIUM_GRAY))
         if explanation:
-            print(self._colorize("# Plan Explanation\n" + explanation, self.ANSI_MEDIUM_GRAY))
+            print(
+                self._colorize(
+                    "# Plan Explanation\n" + explanation, self.ANSI_MEDIUM_GRAY
+                )
+            )
 
     # ------------------------------------------------------------------
     # Prompts
@@ -70,7 +74,24 @@ class CLIRenderer:
             return False
 
         response = re.sub(r"[^a-z]", "", response)
-        positive = {"y", "yes", "ok", "okay", "sure", "apply", "add", "addit", "create", "commit", "confirm", "do", "doit", "write", "writeit", "save"}
+        positive = {
+            "y",
+            "yes",
+            "ok",
+            "okay",
+            "sure",
+            "apply",
+            "add",
+            "addit",
+            "create",
+            "commit",
+            "confirm",
+            "do",
+            "doit",
+            "write",
+            "writeit",
+            "save",
+        }
         if default_no:
             return response in positive
         return response not in {"", "n", "no"}
@@ -118,13 +139,19 @@ class CLIRenderer:
         )
 
         if not diff_lines:
-            print(self._format_status("skip", display_path, suffix=": no changes detected"))
+            print(
+                self._format_status(
+                    "skip", display_path, suffix=": no changes detected"
+                )
+            )
             return "no_change"
 
         print(self._format_diff(diff_lines))
 
         if auto_apply:
-            print(self._format_status("auto", display_path, prefix="applying changes to "))
+            print(
+                self._format_status("auto", display_path, prefix="applying changes to ")
+            )
             confirmed = True
         else:
             confirmed = self.prompt_confirm(
@@ -145,13 +172,19 @@ class CLIRenderer:
             print(self._format_status("applied", display_path))
             return "applied"
         except Exception as exc:  # pragma: no cover - filesystem errors
-            print(self._format_status("error", display_path, suffix=f": failed to write ({exc})"))
+            print(
+                self._format_status(
+                    "error", display_path, suffix=f": failed to write ({exc})"
+                )
+            )
             return f"error: failed to write {display_path}: {exc}"
 
     # ------------------------------------------------------------------
     # Loader utilities
     # ------------------------------------------------------------------
-    def start_loader(self) -> tuple[Optional[threading.Event], Optional[threading.Thread]]:
+    def start_loader(
+        self,
+    ) -> tuple[Optional[threading.Event], Optional[threading.Thread]]:
         if self._loader_thread and self._loader_thread.is_alive():
             return self._loader_stop, self._loader_thread
 
@@ -215,7 +248,11 @@ class CLIRenderer:
                 formatted.append(line)
                 continue
 
-            if line.startswith("--- ") or line.startswith("+++ ") or line.startswith("diff "):
+            if (
+                line.startswith("--- ")
+                or line.startswith("+++ ")
+                or line.startswith("diff ")
+            ):
                 formatted.append(line)
                 continue
 
@@ -251,17 +288,25 @@ class CLIRenderer:
 
             if colorize and prefix:
                 if prefix == "+":
-                    line_with_numbers = f"{self.ANSI_WHITE}{line_with_numbers}{self.ANSI_RESET}"
+                    line_with_numbers = (
+                        f"{self.ANSI_WHITE}{line_with_numbers}{self.ANSI_RESET}"
+                    )
                 elif prefix == "-":
-                    line_with_numbers = f"{self.ANSI_DIM_GRAY}{line_with_numbers}{self.ANSI_RESET}"
+                    line_with_numbers = (
+                        f"{self.ANSI_DIM_GRAY}{line_with_numbers}{self.ANSI_RESET}"
+                    )
                 else:
-                    line_with_numbers = f"{self.ANSI_DIM_GRAY}{line_with_numbers}{self.ANSI_RESET}"
+                    line_with_numbers = (
+                        f"{self.ANSI_DIM_GRAY}{line_with_numbers}{self.ANSI_RESET}"
+                    )
 
             formatted.append(line_with_numbers)
 
         return "\n".join(formatted)
 
-    def _format_status(self, label: str, path: Path, *, prefix: str = "", suffix: str = "") -> str:
+    def _format_status(
+        self, label: str, path: Path, *, prefix: str = "", suffix: str = ""
+    ) -> str:
         tag = f"[{label}]"
         if self._supports_color:
             if label.lower() == "applied":

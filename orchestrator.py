@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import os
 import subprocess
-import sys
 from pathlib import Path
 from typing import Dict, Iterable, Optional
 
@@ -53,7 +52,9 @@ class Orchestrator:
                 limit=args.limit,
                 max_bytes=args.max_bytes,
                 defaults={
-                    "limit": int(context_defaults.get("read_limit", DEFAULT_READ_LIMIT)),
+                    "limit": int(
+                        context_defaults.get("read_limit", DEFAULT_READ_LIMIT)
+                    ),
                     "max_bytes": int(context_defaults.get("max_bytes", MAX_READ_BYTES)),
                 },
             )
@@ -69,7 +70,9 @@ class Orchestrator:
                 prompt_text = " ".join(prompt_components).strip()
                 if candidate_path.is_file():
                     if not prompt_text:
-                        self.renderer.display_info("Provide an instruction after the file path.")
+                        self.renderer.display_info(
+                            "Provide an instruction after the file path."
+                        )
                         return 1
                     return self.engine.run_edit(scope_arg, prompt_text)
                 else:
@@ -160,7 +163,9 @@ class Orchestrator:
         curl_rc = curl.wait()
         if curl_rc != 0:
             stderr = (
-                curl.stderr.read().decode("utf-8", errors="replace") if curl.stderr else ""
+                curl.stderr.read().decode("utf-8", errors="replace")
+                if curl.stderr
+                else ""
             )
             if stderr:
                 self.renderer.display_error(stderr)
@@ -173,10 +178,22 @@ class Orchestrator:
     def _parse_args(self, argv: list[str]) -> argparse.Namespace:
         parser = argparse.ArgumentParser(description="Codex-style terminal assistant")
         parser.add_argument("--read", metavar="PATH", help="Preview a file slice")
-        parser.add_argument("--offset", type=int, default=None, help="0-based line offset")
-        parser.add_argument("--limit", type=int, default=None, help="Number of lines to read")
-        parser.add_argument("--max-bytes", dest="max_bytes", type=int, default=None, help="Maximum bytes to load")
-        parser.add_argument("scope_or_prompt", nargs="?", help="Optional scope or beginning of prompt")
+        parser.add_argument(
+            "--offset", type=int, default=None, help="0-based line offset"
+        )
+        parser.add_argument(
+            "--limit", type=int, default=None, help="Number of lines to read"
+        )
+        parser.add_argument(
+            "--max-bytes",
+            dest="max_bytes",
+            type=int,
+            default=None,
+            help="Maximum bytes to load",
+        )
+        parser.add_argument(
+            "scope_or_prompt", nargs="?", help="Optional scope or beginning of prompt"
+        )
         parser.add_argument("prompt", nargs="*", help="Additional prompt words")
         return parser.parse_args(argv)
 
@@ -190,13 +207,19 @@ class Orchestrator:
         defaults: Dict[str, int],
     ) -> int:
         target = Path(path_str).expanduser()
-        target = (Path.cwd() / target).resolve() if not target.is_absolute() else target.resolve()
+        target = (
+            (Path.cwd() / target).resolve()
+            if not target.is_absolute()
+            else target.resolve()
+        )
 
         if not target.exists():
             self.renderer.display_error(f"File not found: {target}")
             return 1
         if target.is_dir():
-            self.renderer.display_error(f"{target} is a directory. Use --read with files only.")
+            self.renderer.display_error(
+                f"{target} is a directory. Use --read with files only."
+            )
             return 1
 
         safe_offset = max(0, offset or 0)
@@ -210,7 +233,9 @@ class Orchestrator:
             max_bytes=safe_bytes,
         )
         rel_root = Path.cwd().resolve()
-        self.renderer.display_info(format_file_slice_for_prompt(file_slice, rel_root=rel_root))
+        self.renderer.display_info(
+            format_file_slice_for_prompt(file_slice, rel_root=rel_root)
+        )
 
         if file_slice.truncated:
             try:
