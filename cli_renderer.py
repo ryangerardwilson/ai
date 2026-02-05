@@ -14,7 +14,7 @@ class CLIRenderer:
     """Console renderer for the ai CLI."""
 
     ANSI_WHITE = "\033[97m"
-    ANSI_LIGHT_GRAY = "\033[37m"
+    ANSI_MEDIUM_GRAY = "\033[37m"
     ANSI_DIM_GRAY = "\033[90m"
     ANSI_RESET = "\033[0m"
 
@@ -32,7 +32,7 @@ class CLIRenderer:
     def display_error(self, text: str) -> None:
         if text:
             if sys.stderr.isatty():
-                print(self._colorize(text, self.ANSI_LIGHT_GRAY), file=sys.stderr)
+                print(self._colorize(text, self.ANSI_DIM_GRAY), file=sys.stderr)
             else:
                 print(text, file=sys.stderr)
 
@@ -42,17 +42,17 @@ class CLIRenderer:
 
     def display_assistant_message(self, text: str) -> None:
         if text:
-            print(self._colorize(text, self.ANSI_LIGHT_GRAY))
+            print(self._colorize(text, self.ANSI_DIM_GRAY))
 
     def display_shell_output(self, text: str) -> None:
         if text:
-            print(self._colorize(text, self.ANSI_LIGHT_GRAY))
+            print(self._colorize(text, self.ANSI_DIM_GRAY))
 
     def display_plan_update(self, plan: str, explanation: Optional[str]) -> None:
         if plan:
-            print(self._colorize("# Updated Plan\n" + plan, self.ANSI_LIGHT_GRAY))
+            print(self._colorize("# Updated Plan\n" + plan, self.ANSI_DIM_GRAY))
         if explanation:
-            print(self._colorize("# Plan Explanation\n" + explanation, self.ANSI_LIGHT_GRAY))
+            print(self._colorize("# Plan Explanation\n" + explanation, self.ANSI_DIM_GRAY))
 
     # ------------------------------------------------------------------
     # Prompts
@@ -231,7 +231,7 @@ class CLIRenderer:
                 if prefix == "+":
                     line_with_numbers = f"{self.ANSI_WHITE}{line_with_numbers}{self.ANSI_RESET}"
                 elif prefix == "-":
-                    line_with_numbers = f"{self.ANSI_LIGHT_GRAY}{line_with_numbers}{self.ANSI_RESET}"
+                    line_with_numbers = f"{self.ANSI_DIM_GRAY}{line_with_numbers}{self.ANSI_RESET}"
                 else:
                     line_with_numbers = f"{self.ANSI_DIM_GRAY}{line_with_numbers}{self.ANSI_RESET}"
 
@@ -244,8 +244,6 @@ class CLIRenderer:
         if self._supports_color:
             if label.lower() == "applied":
                 tag = f"{self.ANSI_WHITE}{tag}{self.ANSI_RESET}"
-            elif label.lower() == "error":
-                tag = f"{self.ANSI_LIGHT_GRAY}{tag}{self.ANSI_RESET}"
             else:
                 tag = f"{self.ANSI_DIM_GRAY}{tag}{self.ANSI_RESET}"
         body = f"{prefix}{path}"
