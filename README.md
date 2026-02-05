@@ -42,6 +42,7 @@ python main.py
 - `ai` — launch the interactive chat loop (Vim opens your scratch buffer for prompts).
 - `ai "how do I write a release workflow?"` — send a one-off prompt; the reply prints to stdout.
 - `ai -e path/to/file.py "replace legacy API usage"` — rewrite a file, inspect the diff, and apply if you confirm.
+- If you decline the proposed rewrite, `ai` simply asks for extra context so you can retry the edit immediately.
 - `ai -v` — print the installed version.
 - `ai -u` — rerun the installer script if a newer release exists.
 - `ai -h` — show the CLI help summary.

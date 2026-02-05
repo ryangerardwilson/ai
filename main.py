@@ -532,6 +532,7 @@ def handle_edit_mode(
     instruction: str,
     model: str | None = None,
     config: Dict[str, Any] | None = None,
+    baseline_text: str | None = None,
 ):
     target_path = Path(path_str).expanduser()
     if not target_path.exists():
@@ -542,13 +543,22 @@ def handle_edit_mode(
         return 1
 
     try:
-        original_text = target_path.read_text(encoding="utf-8")
+        current_text = target_path.read_text(encoding="utf-8")
     except UnicodeDecodeError:
         print(f"{target_path} isn't UTF-8 text. I'm not hex-editing that for you.")
         return 1
     except OSError as exc:
         print(f"Couldn't read {target_path}: {exc}")
         return 1
+
+    base_text = current_text if baseline_text is None else baseline_text
+
+    if baseline_text is not None and current_text != baseline_text:
+        print(
+            "File changed on disk since the edit session began. Showing diff against"
+            " the original snapshot.",
+            file=sys.stderr,
+        )
 
     effective_model = resolve_model("edit", config, model)
     api_key_value = resolve_api_key(config=config)
@@ -562,7 +572,7 @@ def handle_edit_mode(
         "Instruction:\n"
         f"{instruction}\n\n"
         "Original file contents:\n"
-        f"{original_text}"
+        f"{base_text}"
     )
 
     stop_event, loader_thread = start_loader()
@@ -610,13 +620,13 @@ def handle_edit_mode(
         print("Model returned empty content. Not touching your file.")
         return 1
 
-    if proposed_text == original_text:
+    if proposed_text == current_text:
         print("Model produced identical content. Nothing to do.")
         return 0
 
     diff_lines = list(
         difflib.unified_diff(
-            original_text.splitlines(),
+            base_text.splitlines(),
             proposed_text.splitlines(),
             fromfile=str(target_path),
             tofile=f"{target_path} (proposed)",
@@ -631,13 +641,33 @@ def handle_edit_mode(
     diff_output = add_line_numbers_to_diff(diff_lines)
     print(diff_output)
 
-    confirmation = input("Apply changes? [y/N]: ").strip().lower()
+    try:
+        confirmation = input("Apply changes? [y/N]: ").strip().lower()
+    except KeyboardInterrupt:
+        print("\nInterrupted. Exiting without changes.")
+        raise
     if confirmation not in {"y", "yes"}:
         print("Changes discarded. Maybe next time.")
+        try:
+            extra_context = input("add_context >>> ").strip()
+        except KeyboardInterrupt:
+            print("\nInterrupted. Exiting without changes.")
+            raise
+        if extra_context:
+            combined_instruction = (
+                f"{instruction}\n\nAdditional context provided after review:\n{extra_context}"
+            )
+            return handle_edit_mode(
+                path_str,
+                combined_instruction,
+                model=model,
+                config=config,
+                baseline_text=base_text,
+            )
         return 0
 
     final_text = proposed_text
-    if original_text.endswith("\n") and not final_text.endswith("\n"):
+    if base_text.endswith("\n") and not final_text.endswith("\n"):
         final_text += "\n"
 
     try:
@@ -693,4 +723,10 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    try:
+        exit_code = main(sys.argv[1:])
+    except KeyboardInterrupt:
+        print("\nInterrupted by user.")
+        sys.exit(130)
+    else:
+        sys.exit(exit_code)
