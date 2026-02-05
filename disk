@@ -1,2 +1,0 @@
-python add_two_numbers.py 2 3      # prints 5.0
-python multiply_two_numbers.py 4 5 # prints 20.0
