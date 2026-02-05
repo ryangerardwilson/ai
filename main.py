@@ -69,8 +69,16 @@ TOOL_DEFINITIONS = [
             "type": "object",
             "properties": {
                 "path": {"type": "string", "description": "Path to the file"},
-                "offset": {"type": "integer", "minimum": 0, "description": "Optional byte offset"},
-                "limit": {"type": "integer", "minimum": 1, "description": "Optional byte limit"},
+                "offset": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Optional byte offset",
+                },
+                "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Optional byte limit",
+                },
             },
             "required": ["path"],
         },
@@ -102,7 +110,10 @@ TOOL_DEFINITIONS = [
             "type": "object",
             "properties": {
                 "path": {"type": "string", "description": "Path to the file"},
-                "contents": {"type": "string", "description": "Full replacement file contents"},
+                "contents": {
+                    "type": "string",
+                    "description": "Full replacement file contents",
+                },
             },
             "required": ["path", "contents"],
         },
@@ -131,8 +142,15 @@ TOOL_DEFINITIONS = [
                     "description": "Command to execute (string or list of strings)",
                     "items": {"type": "string"},
                 },
-                "workdir": {"type": "string", "description": "Optional working directory"},
-                "timeout_ms": {"type": "integer", "minimum": 1, "description": "Optional timeout in milliseconds"},
+                "workdir": {
+                    "type": "string",
+                    "description": "Optional working directory",
+                },
+                "timeout_ms": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Optional timeout in milliseconds",
+                },
             },
             "required": ["command"],
         },
@@ -145,7 +163,10 @@ TOOL_DEFINITIONS = [
             "type": "object",
             "properties": {
                 "plan": {"type": "string", "description": "New plan outline"},
-                "explanation": {"type": "string", "description": "Optional reasoning or notes"},
+                "explanation": {
+                    "type": "string",
+                    "description": "Optional reasoning or notes",
+                },
             },
             "required": ["plan"],
         },
@@ -161,7 +182,7 @@ def _print_help() -> None:
     print(
         "ai - Codex-style terminal assistant\n\n"
         "Usage:\n"
-        "  ai [SCOPE] \"question or instruction\"\n"
+        '  ai [SCOPE] "question or instruction"\n'
         "      SCOPE (optional) is a file or directory to focus on\n"
         "      When SCOPE is a file, ai proposes edits with diff approval\n"
         "  ai -h            Show this help\n"
@@ -501,9 +522,7 @@ def start_loader(color_prefix=""):
 
 
 def parse_args(argv):
-    parser = argparse.ArgumentParser(
-        description="Codex-style terminal assistant"
-    )
+    parser = argparse.ArgumentParser(description="Codex-style terminal assistant")
     parser.add_argument(
         "--read",
         metavar="PATH",
@@ -567,7 +586,9 @@ def _show_file_slice(
     safe_limit = max(1, (limit or defaults.get("limit", DEFAULT_READ_LIMIT)))
     safe_bytes = max(1, (max_bytes or defaults.get("max_bytes", MAX_READ_BYTES)))
 
-    file_slice = read_file_slice(target, offset=safe_offset, limit=safe_limit, max_bytes=safe_bytes)
+    file_slice = read_file_slice(
+        target, offset=safe_offset, limit=safe_limit, max_bytes=safe_bytes
+    )
     rel_root = Path.cwd().resolve()
     print(format_file_slice_for_prompt(file_slice, rel_root=rel_root))
 
@@ -599,7 +620,9 @@ def strip_code_fence(raw_response):
 def add_line_numbers_to_diff(diff_lines):
     numbered = []
     old_no = new_no = None
-    header_pattern = re.compile(r"^@@ -(?P<old>\d+)(?:,(?P<old_count>\d+))? \+(?P<new>\d+)(?:,(?P<new_count>\d+))? @@")
+    header_pattern = re.compile(
+        r"^@@ -(?P<old>\d+)(?:,(?P<old_count>\d+))? \+(?P<new>\d+)(?:,(?P<new_count>\d+))? @@"
+    )
 
     colorize = sys.stdout.isatty()
 
@@ -612,7 +635,11 @@ def add_line_numbers_to_diff(diff_lines):
             numbered.append(line)
             continue
 
-        if line.startswith("--- ") or line.startswith("+++ ") or line.startswith("diff "):
+        if (
+            line.startswith("--- ")
+            or line.startswith("+++ ")
+            or line.startswith("diff ")
+        ):
             numbered.append(line)
             continue
 
@@ -766,7 +793,9 @@ def _make_tool_call_item(
     raw_id: Any = None,
     reasoning_id: str | None = None,
 ) -> Dict[str, Any]:
-    serialized_arguments = arguments if isinstance(arguments, str) else json.dumps(arguments or {})
+    serialized_arguments = (
+        arguments if isinstance(arguments, str) else json.dumps(arguments or {})
+    )
     item: Dict[str, Any] = {
         "type": "function_call",
         "call_id": call_id,
@@ -794,7 +823,7 @@ def _detect_generated_files(message: str) -> list[tuple[str, str]]:
             i += 1
             continue
 
-        filename = match.group(1).strip().rstrip(':').strip()
+        filename = match.group(1).strip().rstrip(":").strip()
         j = i + 1
         while j < len(lines) and not lines[j].startswith("```"):
             j += 1
@@ -863,7 +892,9 @@ def _review_and_apply_file_update(
         normalized = "y"
     else:
         try:
-            confirmation_raw = input(f"Apply changes to {relative}? [y/N]: ").strip().lower()
+            confirmation_raw = (
+                input(f"Apply changes to {relative}? [y/N]: ").strip().lower()
+            )
         except KeyboardInterrupt:
             print("\nInterrupted while awaiting confirmation.")
             raise
@@ -894,7 +925,9 @@ def _review_and_apply_file_update(
 
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content + ("\n" if not content.endswith("\n") else ""), encoding="utf-8")
+        path.write_text(
+            content + ("\n" if not content.endswith("\n") else ""), encoding="utf-8"
+        )
         os.chmod(path, 0o644)
         print(f"[applied] {relative}")
     except Exception as exc:
@@ -1202,9 +1235,7 @@ def run_codex_edit(
             print("\nInterrupted. Exiting without changes.")
             raise
         if extra_context:
-            combined_instruction = (
-                f"{instruction}\n\nAdditional context provided after review:\n{extra_context}"
-            )
+            combined_instruction = f"{instruction}\n\nAdditional context provided after review:\n{extra_context}"
             return run_codex_edit(
                 path_str,
                 combined_instruction,
@@ -1246,7 +1277,9 @@ def _resolve_scope(scope: str | None, repo_root: Path) -> tuple[Path, Path, str]
     return candidate.parent, candidate.parent, label
 
 
-def run_codex_conversation(prompt: str, scope: str | None, config: Dict[str, Any]) -> int:
+def run_codex_conversation(
+    prompt: str, scope: str | None, config: Dict[str, Any]
+) -> int:
     raw_prompt = (prompt or "").strip()
     if not raw_prompt:
         print("Provide a question or instruction.")
@@ -1278,7 +1311,9 @@ def run_codex_conversation(prompt: str, scope: str | None, config: Dict[str, Any
     client = openai.OpenAI(api_key=api_key_value)
 
     scope_sentence = (
-        "Focus on the entire repository." if scope_label == "repository root" else f"Scope: {scope_label}."
+        "Focus on the entire repository."
+        if scope_label == "repository root"
+        else f"Scope: {scope_label}."
     )
 
     system_prompt = textwrap.dedent(
@@ -1323,7 +1358,9 @@ def run_codex_conversation(prompt: str, scope: str | None, config: Dict[str, Any
 
         if pending_context_update:
             conversation_items.append(
-                _make_user_message("Updated repository snapshot:\n" + pending_context_update)
+                _make_user_message(
+                    "Updated repository snapshot:\n" + pending_context_update
+                )
             )
             pending_context_update = None
 
@@ -1403,14 +1440,18 @@ def run_codex_conversation(prompt: str, scope: str | None, config: Dict[str, Any
                     plan_state=plan_state,
                     latest_instruction=latest_instruction,
                 )
-                conversation_items.append(_make_tool_result_message(call_id, result_text))
+                conversation_items.append(
+                    _make_tool_result_message(call_id, result_text)
+                )
                 if mutated:
                     context_dirty = True
                 tool_call_handled = True
 
             elif item_type == "custom_tool_call":
                 tool_name = getattr(item, "name", "")
-                print(f"[tool-call] unsupported custom tool '{tool_name}' requested; ignoring")
+                print(
+                    f"[tool-call] unsupported custom tool '{tool_name}' requested; ignoring"
+                )
                 tool_call_handled = True
 
             elif item_type == "reasoning":
@@ -1423,7 +1464,11 @@ def run_codex_conversation(prompt: str, scope: str | None, config: Dict[str, Any
                     pending_reasoning_queue.append(sanitized)
                 summary = getattr(item, "summary", None)
                 if summary:
-                    reasoning_text = getattr(summary, "text", "") if hasattr(summary, "text") else summary
+                    reasoning_text = (
+                        getattr(summary, "text", "")
+                        if hasattr(summary, "text")
+                        else summary
+                    )
                     if reasoning_text:
                         print(f"# Reasoning\n{reasoning_text}\n")
 
@@ -1455,13 +1500,13 @@ def run_codex_conversation(prompt: str, scope: str | None, config: Dict[str, Any
 
         if assistant_messages and not manual_mutation:
             maybe_creation_claim = any(
-                re.search(r"\b(created|saved|written|added|generated)\b", msg, re.IGNORECASE)
+                re.search(
+                    r"\b(created|saved|written|added|generated)\b", msg, re.IGNORECASE
+                )
                 for msg in assistant_messages
             )
             if maybe_creation_claim:
-                pending_user_message = (
-                    "It appears no files changed. Please call the `write` tool (alias: `write_file`) with the full contents so the file can be created."
-                )
+                pending_user_message = "It appears no files changed. Please call the `write` tool (alias: `write_file`) with the full contents so the file can be created."
                 continue
 
         try:

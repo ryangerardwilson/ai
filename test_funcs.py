@@ -25,7 +25,7 @@ plot_func(x, y, "plot1.png")
 
 # Plotting Quadratic funcs
 x = np.linspace(-2, 2, 100)
-y = -0.5 * 9.8 * x ** 2 + 2 * x + 1
+y = -0.5 * 9.8 * x**2 + 2 * x + 1
 plot_func(x, y, "plot2.png")
 
 x = np.linspace(0, 10, 100)
@@ -34,17 +34,17 @@ plot_func(x, y, "plot3.png")
 
 # Plotting Cubic Polynomial func
 x = np.linspace(-3, 3, 100)
-y = 0.1 * x ** 3 - 0.5 * x ** 2 + x - 2
+y = 0.1 * x**3 - 0.5 * x**2 + x - 2
 plot_func(x, y, "plot_poly4.png")
 
 # Plotting Exponential funcs
 x = np.linspace(-5, 5, 100)
-y = np.e ** x  # This is the same the magic number 'e' raised to the power of x
+y = np.e**x  # This is the same the magic number 'e' raised to the power of x
 plot_func(x, y, "plot4.png")
 
 # Additional Exponential func (base 2)
 x = np.linspace(-5, 5, 100)
-y = 2 ** x  # exponential with base 2
+y = 2**x  # exponential with base 2
 plot_func(x, y, "plot5.png")
 
 print("hhuhuhuhahhahhah")

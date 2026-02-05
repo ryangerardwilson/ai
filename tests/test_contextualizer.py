@@ -36,7 +36,9 @@ def test_read_file_slice_truncates_when_limit_hits():
 def test_read_file_slice_uses_offset():
     path = _write_temp_file(DEFAULT_READ_LIMIT + 5)
     try:
-        slice_info = read_file_slice(path, offset=DEFAULT_READ_LIMIT, limit=5, max_bytes=MAX_READ_BYTES)
+        slice_info = read_file_slice(
+            path, offset=DEFAULT_READ_LIMIT, limit=5, max_bytes=MAX_READ_BYTES
+        )
         assert slice_info.offset == DEFAULT_READ_LIMIT
         assert slice_info.last_line_read == DEFAULT_READ_LIMIT + 5
         assert slice_info.truncated is True

@@ -4,6 +4,7 @@
 Loads JSON config from the XDG path, applies defaults, and honors
 environment overrides for compatibility with existing workflows.
 """
+
 from __future__ import annotations
 
 import json
@@ -67,8 +68,13 @@ def load_config() -> Dict[str, Any]:
     cfg["bash_settings"] = {**dict(DEFAULT_BASH_SETTINGS), **bash_settings_from_file}
 
     context_entry = data.get("context_settings")
-    context_settings_from_file = context_entry if isinstance(context_entry, dict) else {}
-    cfg["context_settings"] = {**dict(DEFAULT_CONTEXT_SETTINGS), **context_settings_from_file}
+    context_settings_from_file = (
+        context_entry if isinstance(context_entry, dict) else {}
+    )
+    cfg["context_settings"] = {
+        **dict(DEFAULT_CONTEXT_SETTINGS),
+        **context_settings_from_file,
+    }
 
     env_key = os.environ.get("OPENAI_API_KEY")
     if env_key:
@@ -109,7 +115,11 @@ def load_config() -> Dict[str, Any]:
 
     env_context_listing = os.environ.get("AI_CONTEXT_INCLUDE_LISTING")
     if env_context_listing:
-        cfg["context_settings"]["include_listing"] = env_context_listing.lower() in {"1", "true", "yes"}
+        cfg["context_settings"]["include_listing"] = env_context_listing.lower() in {
+            "1",
+            "true",
+            "yes",
+        }
 
     return cfg
 

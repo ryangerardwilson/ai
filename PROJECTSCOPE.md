@@ -11,15 +11,27 @@
 - **Minimal footprint** – Depend on the OpenAI Python client plus standard library functionality; keep binaries portable through PyInstaller packaging. ([requirements.txt](requirements.txt), [README.md](README.md))
 
 ## 3. Primary Workflows
-| Flow | Invocation Example | Description | Key Sources |
-| --- | --- | --- | --- |
-| Interactive conversation | `ai` | Analyze the current repository, stream answers, and accept iterative `follow_up >>>` prompts. | [README.md](README.md), [main.py](main.py) |
-| Prompt-only run | `ai "how do I write a release workflow?"` | Execute a single inference without entering follow-up mode. | [README.md](README.md), [main.py](main.py) |
-| File rewrite mode | `ai path/to/file.py "replace legacy API usage"` | Request a full-file rewrite through the edit model, review the unified diff with line numbers, and approve or reject changes. | [README.md](README.md), [main.py](main.py) |
-| Scoped conversation | `ai docs/architecture "summarize these docs"` | Limit context harvesting to a directory while running the conversation loop. | [README.md](README.md), [contextualizer.py](contextualizer.py), [main.py](main.py) |
-| Read-only preview | `ai --read path/to/file.py --offset 400 --limit 200` | Display bounded file slices with continuation hints. | [README.md](README.md), [contextualizer.py](contextualizer.py), [main.py](main.py) |
-| Sandboxed bash | Tool-assisted `shell` calls | Execute guarded shell commands with time, byte, and scope restrictions from within a session. | [bash_executor.py](bash_executor.py), [main.py](main.py) |
-| Self-upgrade | `ai -u` | Fetch and reinstall the latest tagged release using the hosted installer script. | [README.md](README.md), [main.py](main.py), [install.sh](install.sh) |
+| Flow | Invocation Example | Description | Key Sources | | --- | --- | --- |
+--- | | Interactive conversation | `ai` | Analyze the current repository,
+stream answers, and accept iterative `follow_up >>>` prompts. |
+[README.md](README.md), [main.py](main.py) | | Prompt-only run | `ai "how do I
+write a release workflow?"` | Execute a single inference without entering
+follow-up mode. | [README.md](README.md), [main.py](main.py) | | File rewrite
+mode | `ai path/to/file.py "replace legacy API usage"` | Request a full-file
+rewrite through the edit model, review the unified diff with line numbers, and
+approve or reject changes. | [README.md](README.md), [main.py](main.py) | |
+Scoped conversation | `ai docs/architecture "summarize these docs"` | Limit
+context harvesting to a directory while running the conversation loop. |
+[README.md](README.md), [contextualizer.py](contextualizer.py),
+[main.py](main.py) | | Read-only preview | `ai --read path/to/file.py --offset
+400 --limit 200` | Display bounded file slices with continuation hints. |
+[README.md](README.md), [contextualizer.py](contextualizer.py),
+[main.py](main.py) | | Sandboxed bash | Tool-assisted `shell` calls | Execute
+guarded shell commands with time, byte, and scope restrictions from within a
+session. | [bash_executor.py](bash_executor.py), [main.py](main.py) | | Self-
+upgrade | `ai -u` | Fetch and reinstall the latest tagged release using the
+hosted installer script. | [README.md](README.md), [main.py](main.py),
+[install.sh](install.sh) |
 
 ## 4. Architectural Components
 - **CLI orchestrator** – Parses arguments, routes between prompt, chat, edit, read, and upgrade paths, manages OpenAI Responses sessions, and renders annotated diffs. ([main.py](main.py))

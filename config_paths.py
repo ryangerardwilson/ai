@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """XDG-aware config paths for ai."""
+
 from __future__ import annotations
 
 import os

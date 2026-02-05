@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Collect repository context for the Codex-style analysis loop."""
+
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List
@@ -146,7 +146,9 @@ def read_file_slice(
     truncated_by_bytes = False
 
     for line in all_lines[safe_offset : safe_offset + limit]:
-        clipped = line if len(line) <= MAX_LINE_LENGTH else line[:MAX_LINE_LENGTH] + "..."
+        clipped = (
+            line if len(line) <= MAX_LINE_LENGTH else line[:MAX_LINE_LENGTH] + "..."
+        )
         size = len(clipped.encode("utf-8")) + (1 if raw else 0)
         if bytes_used + size > max_bytes:
             truncated_by_bytes = True
@@ -223,7 +225,9 @@ def collect_context(
         if file_windows and candidate in file_windows:
             offset, limit = file_windows[candidate]
         max_bytes = max(1, min(limit_bytes, MAX_READ_BYTES))
-        window = read_file_slice(candidate, offset=offset, limit=max(1, limit), max_bytes=max_bytes)
+        window = read_file_slice(
+            candidate, offset=offset, limit=max(1, limit), max_bytes=max_bytes
+        )
         files.append(window)
 
     return CollectedContext(scope_root=scope_root, listing=listing, files=files)
@@ -236,13 +240,13 @@ def _slice_hint(file_slice: FileSlice) -> str:
             f"Use 'offset' parameter to read beyond line {file_slice.last_line_read})"
         )
     if file_slice.truncated:
-        return (
-            f"(File has more lines. Use 'offset' parameter to read beyond line {file_slice.last_line_read})"
-        )
+        return f"(File has more lines. Use 'offset' parameter to read beyond line {file_slice.last_line_read})"
     return f"(End of file - total {file_slice.total_lines} lines)"
 
 
-def format_file_slice_for_prompt(file_slice: FileSlice, *, rel_root: Path | None = None) -> str:
+def format_file_slice_for_prompt(
+    file_slice: FileSlice, *, rel_root: Path | None = None
+) -> str:
     rel_path = file_slice.path
     if rel_root:
         try:

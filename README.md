@@ -1,6 +1,9 @@
 # ai
 
-`ai` is a blunt, Codex-inspired terminal companion built on the OpenAI API. Launch it to analyze a repository snapshot, iterate on follow-up questions, or hand it a file to rewrite while keeping eyes on the diff. Everything runs from a single binary with explicit controls for upgrades and versioning.
+`ai` is a blunt, Codex-inspired terminal companion built on the OpenAI API.
+Launch it to analyze a repository snapshot, iterate on follow-up questions, or
+hand it a file to rewrite while keeping eyes on the diff. Everything runs from
+a single binary with explicit controls for upgrades and versioning.
 
 ---
 
@@ -14,7 +17,9 @@ Grab the latest tagged release via the helper script:
 curl -fsSL https://raw.githubusercontent.com/ryangerardwilson/ai/main/install.sh | bash
 ```
 
-The script drops the unpacked bundle into `~/.ai/app` and a shim in `~/.ai/bin`. It will attempt to append that directory to your `PATH` (unless you opt out). Once installed, run `ai -h` to confirm everything works.
+The script drops the unpacked bundle into `~/.ai/app` and a shim in
+`~/.ai/bin`. It will attempt to append that directory to your `PATH` (unless
+you opt out). Once installed, run `ai -h` to confirm everything works.
 
 Installer flags of note:
 
@@ -25,7 +30,9 @@ Installer flags of note:
 - `-h`: show installer usage.
 - `--no-modify-path`: skip editing shell rc files; the script prints the `PATH` entry you need.
 
-You can also download the `ai-linux-x64.tar.gz` artifact manually from the releases page and run `install.sh --binary` if you prefer to manage the bundle yourself.
+You can also download the `ai-linux-x64.tar.gz` artifact manually from the
+releases page and run `install.sh --binary` if you prefer to manage the bundle
+yourself.
 
 ### From source
 
@@ -51,7 +58,10 @@ python main.py
 - `ai -u` — rerun the installer script if a newer release exists.
 - `ai -h` — show the CLI help summary.
 
-Each response streams live to your terminal, followed by the `follow_up >>>` prompt so you can iterate. Editing mode (triggered by a file scope or a conversation-generated file) shows a unified diff and preserves permissions when you approve the change.
+Each response streams live to your terminal, followed by the `follow_up >>>`
+prompt so you can iterate. Editing mode (triggered by a file scope or a
+conversation-generated file) shows a unified diff and preserves permissions
+when you approve the change.
 
 ---
 
@@ -86,7 +96,8 @@ Each response streams live to your terminal, followed by the `follow_up >>>` pro
 - `context_settings` (in config or via env vars) tune the initial context window: `{"read_limit": 2000, "max_bytes": 51200, "include_listing": false}` by default. Override with `AI_CONTEXT_READ_LIMIT`, `AI_CONTEXT_MAX_BYTES`, `AI_CONTEXT_INCLUDE_LISTING`, or edit the config directly.
 - Models with the `-codex` suffix (for example `gpt-5-codex`) are Responses-only per [OpenAI's docs](https://platform.openai.com/docs/models/gpt-5-codex); `ai` automatically switches the edit workflow to the Responses API when you configure one.
 
-The application stores temporary chat buffers in `/tmp/chat_history_*.txt`. Killing the process with `Ctrl+C` cleans up any remaining scratch files.
+The application stores temporary chat buffers in `/tmp/chat_history_*.txt`.
+Killing the process with `Ctrl+C` cleans up any remaining scratch files.
 
 ---
 
@@ -98,7 +109,8 @@ Reinstall in place with:
 ai -u
 ```
 
-The binary checks GitHub for the latest release and only downloads when a newer version exists. You can also fetch a specific tag by running:
+The binary checks GitHub for the latest release and only downloads when a newer
+version exists. You can also fetch a specific tag by running:
 
 ```bash
 install.sh -v 0.4.0
@@ -115,7 +127,8 @@ git tag v0.4.0
 git push origin v0.4.0
 ```
 
-GitHub Actions builds a PyInstaller bundle (`ai-linux-x64.tar.gz`), updates `_version.py`, and publishes the asset alongside the tagged release.
+GitHub Actions builds a PyInstaller bundle (`ai-linux-x64.tar.gz`), updates
+`_version.py`, and publishes the asset alongside the tagged release.
 
 ---
 

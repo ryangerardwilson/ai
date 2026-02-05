@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Sandboxed bash execution helpers for ai bash mode."""
+
 from __future__ import annotations
 
 import os
@@ -60,7 +61,9 @@ def _validate_command(command: str) -> None:
 
     tokens = list(_tokenize(command))
     if any(_looks_like_path(token) for token in tokens):
-        raise CommandRejected("Command rejected: absolute or parent paths are not allowed")
+        raise CommandRejected(
+            "Command rejected: absolute or parent paths are not allowed"
+        )
 
 
 def run_sandboxed_bash(
@@ -155,4 +158,9 @@ def format_command_result(result: CommandResult) -> str:
     return textwrap.dedent("\n\n".join(body)).strip()
 
 
-__all__ = ["CommandResult", "CommandRejected", "run_sandboxed_bash", "format_command_result"]
+__all__ = [
+    "CommandResult",
+    "CommandRejected",
+    "run_sandboxed_bash",
+    "format_command_result",
+]
