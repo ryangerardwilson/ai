@@ -1277,7 +1277,7 @@ def run_codex_conversation(prompt: str, scope: str | None, config: Dict[str, Any
 
         tool_call_handled = False
         assistant_messages: list[str] = []
-        pending_reasoning: Dict[str, Dict[str, Any]] = {}
+        pending_reasoning_queue: list[Dict[str, Any]] = []
 
         for item in getattr(response, "output", []) or []:
             item_type = getattr(item, "type", "")
@@ -1296,6 +1296,10 @@ def run_codex_conversation(prompt: str, scope: str | None, config: Dict[str, Any
                 print(f"[debug] response item type={item_type}")
 
             if item_type == "message":
+                if pending_reasoning_queue:
+                    print(f"[debug] flushing {len(pending_reasoning_queue)} reasoning items before message")
+                    while pending_reasoning_queue:
+                        conversation_items.append(pending_reasoning_queue.pop(0))
                 text_parts: list[str] = []
                 for block in getattr(item, "content", []) or []:
                     if getattr(block, "type", "").endswith("text"):
@@ -1316,20 +1320,20 @@ def run_codex_conversation(prompt: str, scope: str | None, config: Dict[str, Any
                 call_id = str(raw_call_id or f"tool-{tool_name}")
                 arguments_payload = item_payload.get("arguments", {})
                 reasoning_id = item_payload.get("reasoning_id")
+                selected_reasoning = None
                 if reasoning_id:
-                    pending = pending_reasoning.pop(str(reasoning_id), None)
-                    if pending:
-                        print(f"[debug] attaching reasoning {reasoning_id} to call {call_id}")
-                        conversation_items.append(pending)
-                else:
-                    # If the function call lacks a reasoning_id but we have exactly one pending
-                    # reasoning item, assume it belongs to this call.
-                    if len(pending_reasoning) == 1:
-                        guessed_reasoning_id, pending_item = pending_reasoning.popitem()
-                        print(
-                            f"[debug] attaching inferred reasoning {guessed_reasoning_id} to call {call_id}"
-                        )
-                        conversation_items.append(pending_item)
+                    for idx, pending in enumerate(pending_reasoning_queue):
+                        if pending.get("id") == reasoning_id:
+                            selected_reasoning = pending_reasoning_queue.pop(idx)
+                            print(f"[debug] attaching reasoning {reasoning_id} to call {call_id}")
+                            break
+                if selected_reasoning is None and pending_reasoning_queue:
+                    selected_reasoning = pending_reasoning_queue.pop(0)
+                    print(
+                        f"[debug] attaching inferred reasoning {selected_reasoning.get('id')} to call {call_id}"
+                    )
+                if selected_reasoning:
+                    conversation_items.append(selected_reasoning)
                 conversation_items.append(
                     _make_tool_call_item(
                         call_id=call_id,
@@ -1364,16 +1368,19 @@ def run_codex_conversation(prompt: str, scope: str | None, config: Dict[str, Any
                 except TypeError as exc:
                     print(f"[tool-call] failed to serialize reasoning item: {exc}")
                 else:
-                    reasoning_id = str(reasoning_payload.get("id")) if reasoning_payload.get("id") else None
-                    if reasoning_id:
-                        sanitized = _sanitize_reasoning_item(reasoning_payload)
-                        pending_reasoning[reasoning_id] = sanitized
-                        print(f"[debug] queued reasoning {reasoning_id}")
+                    sanitized = _sanitize_reasoning_item(reasoning_payload)
+                    pending_reasoning_queue.append(sanitized)
+                    print(f"[debug] queued reasoning {sanitized.get('id')}")
                 summary = getattr(item, "summary", None)
                 if summary:
                     reasoning_text = getattr(summary, "text", "") if hasattr(summary, "text") else summary
                     if reasoning_text:
                         print(f"# Reasoning\n{reasoning_text}\n")
+
+        if pending_reasoning_queue and not tool_call_handled:
+            print(f"[debug] flushing {len(pending_reasoning_queue)} remaining reasoning items post-loop")
+            while pending_reasoning_queue:
+                conversation_items.append(pending_reasoning_queue.pop(0))
 
         if tool_call_handled:
             continue
