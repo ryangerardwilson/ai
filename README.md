@@ -58,9 +58,10 @@ python main.py
 - `ai -u` — rerun the installer script if a newer release exists.
 - `ai -h` — show the CLI help summary.
 
-Each response streams live to your terminal, followed by the `QR >` prompt so you can iterate. Editing mode (triggered by a file scope or a
-conversation-generated file) shows a unified diff and preserves permissions
-when you approve the change.
+Each response streams live to your terminal, followed by the `QR >` prompt so
+you can iterate. Editing mode (triggered by a file scope or a
+conversation-generated file) shows a unified diff and preserves permissions when
+you approve the change.
 prompt so you can iterate. Editing mode (triggered by a file scope or a
 conversation-generated file) shows a unified diff and preserves permissions
 when you approve the change.

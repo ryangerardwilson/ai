@@ -14,7 +14,7 @@ class CLIRenderer:
     """Console renderer for the ai CLI."""
 
     ANSI_WHITE = "\033[97m"
-    ANSI_MEDIUM_GRAY = "\033[38;5;248m"
+    ANSI_MEDIUM_GRAY = "\033[38;5;245m"
     ANSI_DIM_GRAY = "\033[90m"
     ANSI_RESET = "\033[0m"
 
