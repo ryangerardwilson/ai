@@ -14,12 +14,19 @@ import tempfile
 import signal
 import threading
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Dict, Sequence
 
 try:
     from _version import __version__
 except Exception:  # pragma: no cover - fallback when running from source
     __version__ = "0.0.0"
+
+from config_loader import (
+    load_config,
+    DEFAULT_MODELS,
+    DEFAULT_SYSTEM_PROMPT,
+)
+from config_paths import get_config_path
 
 INSTALL_SH_URL = "https://raw.githubusercontent.com/ryangerardwilson/ai/main/install.sh"
 
@@ -28,6 +35,7 @@ COLOR_ADD = "\033[97m"  # bright white
 COLOR_REMOVE = "\033[37m"  # light gray
 COLOR_CONTEXT = "\033[90m"  # dark gray
 COLOR_RESET = "\033[0m"
+DEFAULT_COLOR = "\033[1;36m"
 
 PRIMARY_FLAG_SET = {"-h", "--help", "-v", "--version", "-V", "-u", "--upgrade"}
 
@@ -126,26 +134,72 @@ def _handle_primary_flags(args: Sequence[str]) -> int | None:
     return 0
 
 
-def resolve_api_key(candidate=None):
+def resolve_api_key(
+    candidate: str | None = None, config: Dict[str, Any] | None = None
+) -> str:
     if candidate:
         return candidate
+    if config:
+        api_key = config.get("openai_api_key")
+        if api_key:
+            return str(api_key)
     api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        print("Export OPENAI_API_KEY, you numbskull.")
-        sys.exit(1)
-    return api_key
+    if api_key:
+        return api_key
+    config_path = get_config_path()
+    print(
+        f"Set OPENAI_API_KEY or add 'openai_api_key' to {config_path}.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+
+def resolve_color(candidate: str | None = None) -> str:
+    if candidate:
+        return candidate
+    env_color = os.environ.get("AI_COLOR")
+    if env_color:
+        return env_color
+    return DEFAULT_COLOR
+
+
+def resolve_model(
+    mode: str,
+    config: Dict[str, Any] | None = None,
+    override: str | None = None,
+) -> str:
+    if override:
+        return override
+    cfg = config or {}
+    models_obj = cfg.get("models")
+    if isinstance(models_obj, dict):
+        candidate = models_obj.get(mode)
+        if candidate:
+            return str(candidate)
+    return DEFAULT_MODELS.get(mode, DEFAULT_MODELS.get("prompt", "gpt-5-mini"))
 
 
 class AIChat:
-    def __init__(self, model="gpt-5-mini", ai_font_color="\033[1;36m", api_key=None):
-        api_key = resolve_api_key(api_key)
-        self.client = openai.OpenAI(api_key=api_key)
-        self.model = model
-        self.ai_color = ai_font_color
+    def __init__(
+        self,
+        model: str | None = None,
+        ai_font_color: str | None = None,
+        api_key: str | None = None,
+        config: Dict[str, Any] | None = None,
+        mode: str = "chat",
+    ):
+        self.config = config or {}
+        self.mode = mode
+        resolved_model = resolve_model(mode, self.config, model)
+        resolved_color = resolve_color(ai_font_color)
+        system_prompt = self.config.get("system_instruction", DEFAULT_SYSTEM_PROMPT)
+
+        api_key_value = resolve_api_key(api_key, self.config)
+        self.client = openai.OpenAI(api_key=api_key_value)
+        self.model = resolved_model
+        self.ai_color = resolved_color
         self.reset_color = "\033[0m"
-        self.system_prompt = (
-            "Channel a blunt, no‑nonsense, technically brutal critique style"
-        )
+        self.system_prompt = system_prompt
         self.messages = [{"role": "system", "content": self.system_prompt}]
         fd, self.history_file = tempfile.mkstemp(
             prefix="chat_history_", suffix=".txt", dir="/tmp"
@@ -416,7 +470,12 @@ def add_line_numbers_to_diff(diff_lines):
     return "\n".join(numbered)
 
 
-def handle_edit_mode(path_str, instruction, model="gpt-5-mini"):
+def handle_edit_mode(
+    path_str: str,
+    instruction: str,
+    model: str | None = None,
+    config: Dict[str, Any] | None = None,
+):
     target_path = Path(path_str).expanduser()
     if not target_path.exists():
         print(f"{target_path} doesn't exist. Check your spelling, hotshot.")
@@ -434,7 +493,9 @@ def handle_edit_mode(path_str, instruction, model="gpt-5-mini"):
         print(f"Couldn't read {target_path}: {exc}")
         return 1
 
-    client = openai.OpenAI(api_key=resolve_api_key())
+    effective_model = resolve_model("edit", config, model)
+    api_key_value = resolve_api_key(config=config)
+    client = openai.OpenAI(api_key=api_key_value)
     system_message = (
         "You rewrite files. Return only the complete updated file content. "
         "No explanations, no code fences, no commentary."
@@ -451,7 +512,7 @@ def handle_edit_mode(path_str, instruction, model="gpt-5-mini"):
 
     try:
         response = client.chat.completions.create(  # type: ignore[arg-type]
-            model=model,
+            model=effective_model,
             messages=[  # type: ignore[arg-type]
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": user_message},
@@ -533,6 +594,8 @@ def main(argv=None):
     if primary_rc is not None:
         return primary_rc
 
+    config = load_config()
+
     args = parse_args(arg_list)
 
     if args.edit:
@@ -540,11 +603,11 @@ def main(argv=None):
         if not instruction:
             print("Give me an instruction after the file path, pal.")
             return 1
-        return handle_edit_mode(args.edit, instruction)
+        return handle_edit_mode(args.edit, instruction, config=config)
 
     prompt = " ".join(args.prompt).strip()
     if prompt:
-        chat = AIChat()
+        chat = AIChat(config=config, mode="prompt")
         appended_prompt = (
             f"{prompt}\n\nRespond as concisely as possible in less than 200 words."
         )
@@ -559,7 +622,7 @@ def main(argv=None):
             chat.cleanup_history_file()
             return 0
 
-    chat = AIChat()
+    chat = AIChat(config=config)
     chat.run()
     return 0
 

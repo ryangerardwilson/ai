@@ -35,8 +35,6 @@ cd ai
 python main.py
 ```
 
-Make sure `OPENAI_API_KEY` is exported in your environment before launching the CLI.
-
 ---
 
 ## Usage
@@ -54,9 +52,23 @@ Interactive mode keeps a temporary transcript under `/tmp`, streams assistant ou
 
 ## Configuration & Environment
 
-- `OPENAI_API_KEY` **must** be set; otherwise the CLI exits immediately.
-- `AI_MODEL` (optional) overrides the default model name (`gpt-5-mini`).
-- `AI_COLOR` (optional) controls the ANSI color prefix for assistant output (e.g. `export AI_COLOR="\033[1;35m"`).
+- `~/.config/ai/config.json` (respecting `XDG_CONFIG_HOME`) controls runtime defaults. Example:
+
+```json
+{
+  "openai_api_key": "sk-your-key",
+  "models": {
+    "chat": "gpt-5.2",
+    "prompt": "gpt-5-mini",
+    "edit": "gpt-5-codex"
+  },
+  "system_instruction": "Channel a blunt, no-nonsense, technically brutal critique style"
+}
+```
+
+- `OPENAI_API_KEY` overrides the `openai_api_key` entry at runtime (handy for CI or shells).
+- `AI_MODEL` overrides every mode's model; `AI_MODEL_CHAT`, `AI_MODEL_PROMPT`, and `AI_MODEL_EDIT` target individual modes.
+- `AI_COLOR` adjusts the ANSI color prefix for assistant output; `AI_SYSTEM_PROMPT` overrides the system instruction.
 
 The application stores temporary chat buffers in `/tmp/chat_history_*.txt`. Killing the process with `Ctrl+C` cleans up any remaining scratch files.
 
