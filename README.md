@@ -72,27 +72,14 @@ when you approve the change.
 ```json
 {
   "openai_api_key": "sk-your-key",
-  "models": {
-    "chat": "gpt-5.2",
-    "prompt": "gpt-5-mini",
-    "edit": "gpt-5-codex",
-    "bash": "gpt-5-codex"
-  },
-  "system_instruction": "Channel a blunt, no-nonsense, technically brutal critique style",
-  "bash_settings": {
-    "max_seconds": 20,
-    "max_output_bytes": 32768,
-    "max_iterations": 6
-  }
+  "model": "gpt-5-codex"
 }
 ```
 
 - `OPENAI_API_KEY` overrides the `openai_api_key` entry at runtime (handy for CI or shells).
-- `AI_MODEL` overrides every mode's model; `AI_MODEL_CHAT`, `AI_MODEL_PROMPT`, and `AI_MODEL_EDIT` target individual modes.
-- `AI_COLOR` adjusts the ANSI color prefix for assistant output; `AI_SYSTEM_PROMPT` overrides the system instruction.
-- `AI_MODEL_BASH` selects the model used in bash mode (defaults to a Responses-capable Codex model).
-- `AI_BASH_MAX_SECONDS`, `AI_BASH_MAX_OUTPUT`, and `AI_BASH_MAX_ITERATIONS` tune command timeout, captured bytes, and maximum command/response loops.
-- `bash_settings` in the config file mirrors those environment variables if you prefer static defaults.
+- `AI_MODEL` overrides the single `model` value.
+- `AI_COLOR` adjusts the ANSI color prefix for assistant output.
+- `AI_BASH_MAX_SECONDS` and `AI_BASH_MAX_OUTPUT` tune shell command timeout and output caps.
 - `context_settings` (in config or via env vars) tune the initial context window: `{"read_limit": 2000, "max_bytes": 51200, "include_listing": false}` by default. Override with `AI_CONTEXT_READ_LIMIT`, `AI_CONTEXT_MAX_BYTES`, `AI_CONTEXT_INCLUDE_LISTING`, or edit the config directly.
 - Models with the `-codex` suffix (for example `gpt-5-codex`) are Responses-only per [OpenAI's docs](https://platform.openai.com/docs/models/gpt-5-codex); `ai` automatically switches the edit workflow to the Responses API when you configure one.
 

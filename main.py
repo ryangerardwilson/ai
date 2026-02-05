@@ -26,8 +26,7 @@ except Exception:  # pragma: no cover - fallback when running from source
 
 from config_loader import (
     load_config,
-    DEFAULT_MODELS,
-    DEFAULT_SYSTEM_PROMPT,
+    DEFAULT_MODEL,
 )
 from config_paths import get_config_path
 from bash_executor import (
@@ -59,6 +58,8 @@ RESPONSES_ONLY_MODELS = {
     "gpt-5.1-codex",
     "gpt-5.1-codex-mini",
 }
+
+CHAT_SYSTEM_PROMPT = "Channel a blunt, no-nonsense, technically brutal critique style"
 
 TOOL_DEFINITIONS = [
     {
@@ -309,12 +310,10 @@ def resolve_model(
     if override:
         return override
     cfg = config or {}
-    models_obj = cfg.get("models")
-    if isinstance(models_obj, dict):
-        candidate = models_obj.get(mode)
-        if candidate:
-            return str(candidate)
-    return DEFAULT_MODELS.get(mode, DEFAULT_MODELS.get("prompt", "gpt-5-mini"))
+    candidate = cfg.get("model")
+    if isinstance(candidate, str) and candidate.strip():
+        return candidate.strip()
+    return DEFAULT_MODEL
 
 
 class AIChat:
@@ -330,7 +329,7 @@ class AIChat:
         self.mode = mode
         resolved_model = resolve_model(mode, self.config, model)
         resolved_color = resolve_color(ai_font_color)
-        system_prompt = self.config.get("system_instruction", DEFAULT_SYSTEM_PROMPT)
+        system_prompt = CHAT_SYSTEM_PROMPT
 
         api_key_value = resolve_api_key(api_key, self.config)
         self.client = openai.OpenAI(api_key=api_key_value)
@@ -1081,9 +1080,14 @@ def _handle_tool_call(
         except ValueError:
             return f"error: workdir outside project root ({workdir})", False
 
-        settings = config.get("bash_settings", {})
-        timeout_seconds = int(settings.get("max_seconds", 15) or 15)
-        max_output_bytes = int(settings.get("max_output_bytes", 20000) or 20000)
+        try:
+            timeout_seconds = max(1, int(os.environ.get("AI_BASH_MAX_SECONDS", "15")))
+        except (TypeError, ValueError):
+            timeout_seconds = 15
+        try:
+            max_output_bytes = max(1, int(os.environ.get("AI_BASH_MAX_OUTPUT", "20000")))
+        except (TypeError, ValueError):
+            max_output_bytes = 20000
         timeout_override = args.get("timeout_ms")
         if timeout_override is not None:
             try:

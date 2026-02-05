@@ -37,13 +37,13 @@ hosted installer script. | [README.md](README.md), [main.py](main.py),
 - **CLI orchestrator** – Parses arguments, routes between prompt, chat, edit, read, and upgrade paths, manages OpenAI Responses sessions, and renders annotated diffs. ([main.py](main.py))
 - **Context harvesting** – Collects representative file snippets, enforces byte/line caps, and formats content for prompt injection. ([contextualizer.py](contextualizer.py))
 - **Sandboxed execution layer** – Validates bash commands against disallowed patterns, enforces repo-relative execution, and truncates oversized output. ([bash_executor.py](bash_executor.py))
-- **Configuration loader** – Resolves XDG-aware config files, merges defaults, and applies environment overrides for models, system prompts, bash settings, and context limits. ([config_loader.py](config_loader.py), [config_paths.py](config_paths.py))
+- **Configuration loader** – Resolves XDG-aware config files, merges defaults, and applies environment overrides for the shared model, bash settings, and context limits. ([config_loader.py](config_loader.py), [config_paths.py](config_paths.py))
 - **Version metadata** – Provides the runtime semantic version string for CLI reporting and release automation. ([_version.py](_version.py))
 - **Distribution tooling** – Shell installer fetches tagged PyInstaller bundles, installs shims, and manages upgrades. ([install.sh](install.sh), [README.md](README.md))
 
 ## 5. Configuration & Environment
-- Default configuration lives at `~/.config/ai/config.json` (honoring `XDG_CONFIG_HOME`) and includes API credentials, per-mode model selection, system instruction, bash limits, and context window defaults. ([README.md](README.md), [config_loader.py](config_loader.py), [config_paths.py](config_paths.py))
-- Environment variables such as `OPENAI_API_KEY`, `AI_MODEL*`, `AI_COLOR`, `AI_SYSTEM_PROMPT`, and `AI_CONTEXT_*` override on-disk settings at runtime. ([README.md](README.md), [config_loader.py](config_loader.py))
+- Default configuration lives at `~/.config/ai/config.json` (honoring `XDG_CONFIG_HOME`) and includes API credentials, a shared model identifier, and context window defaults. ([README.md](README.md), [config_loader.py](config_loader.py), [config_paths.py](config_paths.py))
+- Environment variables such as `OPENAI_API_KEY`, `AI_MODEL`, `AI_COLOR`, `AI_BASH_MAX_*`, and `AI_CONTEXT_*` override built-in defaults at runtime. ([README.md](README.md), [config_loader.py](config_loader.py))
 - Conversation transcripts are staged in `/tmp/chat_history_*.txt` during interactive sessions and cleaned up on exit. ([main.py](main.py))
 
 ## 6. Tooling & Safeguards
