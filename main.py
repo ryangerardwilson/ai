@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import argparse
 import difflib
+import json
 import os
 import re
+import shlex
 import openai
 import sys
 import time
@@ -15,7 +17,7 @@ import signal
 import threading
 import textwrap
 from pathlib import Path
-from typing import Any, Dict, Sequence
+from typing import Any, Dict, Sequence, List
 
 try:
     from _version import __version__
@@ -28,7 +30,16 @@ from config_loader import (
     DEFAULT_SYSTEM_PROMPT,
 )
 from config_paths import get_config_path
-from contextualizer import collect_context, format_context
+from bash_executor import (
+    CommandRejected,
+    format_command_result,
+    run_sandboxed_bash,
+)
+from contextualizer import (
+    collect_context,
+    format_context_for_display,
+    format_context_for_prompt,
+)
 
 INSTALL_SH_URL = "https://raw.githubusercontent.com/ryangerardwilson/ai/main/install.sh"
 
@@ -38,7 +49,6 @@ COLOR_REMOVE = "\033[37m"  # light gray
 COLOR_CONTEXT = "\033[90m"  # dark gray
 COLOR_RESET = "\033[0m"
 DEFAULT_COLOR = "\033[1;36m"
-DEFAULT_MAX_READ_BYTES = 8000
 
 PRIMARY_FLAG_SET = {"-h", "--help", "-v", "--version", "-V", "-u", "--upgrade"}
 RESPONSES_ONLY_MODELS = {
@@ -47,6 +57,98 @@ RESPONSES_ONLY_MODELS = {
     "gpt-5.1-codex-mini",
 }
 
+TOOL_DEFINITIONS = [
+    {
+        "type": "function",
+        "name": "read_file",
+        "description": "Read a text file from the repository.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Path to the file"},
+                "offset": {"type": "integer", "minimum": 0, "description": "Optional byte offset"},
+                "limit": {"type": "integer", "minimum": 1, "description": "Optional byte limit"},
+            },
+            "required": ["path"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "write",
+        "description": "Write new contents to a file. Accepts absolute or repository-relative paths.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "filePath": {
+                    "type": "string",
+                    "description": "Absolute path to the file (or a path relative to the project root)",
+                },
+                "content": {
+                    "type": "string",
+                    "description": "Full replacement file contents",
+                },
+            },
+            "required": ["filePath", "content"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "write_file",
+        "description": "Write new contents to a file, replacing the existing text.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Path to the file"},
+                "contents": {"type": "string", "description": "Full replacement file contents"},
+            },
+            "required": ["path", "contents"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "apply_patch",
+        "description": "Apply a unified diff patch to files (prefer write/write_file when possible).",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "patch": {"type": "string", "description": "Unified diff patch"},
+            },
+            "required": ["patch"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "shell",
+        "description": "Run a sandboxed shell command within the project scope.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "command": {
+                    "type": ["array", "string"],
+                    "description": "Command to execute (string or list of strings)",
+                    "items": {"type": "string"},
+                },
+                "workdir": {"type": "string", "description": "Optional working directory"},
+                "timeout_ms": {"type": "integer", "minimum": 1, "description": "Optional timeout in milliseconds"},
+            },
+            "required": ["command"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "update_plan",
+        "description": "Update the running task plan that the assistant is following.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "plan": {"type": "string", "description": "New plan outline"},
+                "explanation": {"type": "string", "description": "Optional reasoning or notes"},
+            },
+            "required": ["plan"],
+        },
+    },
+]
+
 
 def _is_responses_model(model: str) -> bool:
     return model in RESPONSES_ONLY_MODELS
@@ -54,11 +156,11 @@ def _is_responses_model(model: str) -> bool:
 
 def _print_help() -> None:
     print(
-        "ai - Terminal AI assistant\n\n"
+        "ai - Codex-style terminal assistant\n\n"
         "Usage:\n"
-        "  ai               Launch the interactive chat session\n"
-        "  ai <prompt...>   Send a one-off prompt\n"
-        "  ai -e PATH ...   Rewrite a file via edit mode\n"
+        "  ai [SCOPE] \"question or instruction\"\n"
+        "      SCOPE (optional) is a file or directory to focus on\n"
+        "      When SCOPE is a file, ai proposes edits with diff approval\n"
         "  ai -h            Show this help\n"
         "  ai -v            Show installed version\n"
         "  ai -u            Reinstall the latest release if a newer version exists"
@@ -397,23 +499,18 @@ def start_loader(color_prefix=""):
 
 def parse_args(argv):
     parser = argparse.ArgumentParser(
-        description="Snarky AI chat interface with edit and bash modes"
+        description="Codex-style terminal assistant"
     )
     parser.add_argument(
-        "-e",
-        "--edit",
-        metavar="PATH",
-        help="Rewrite the given file according to the instruction",
-    )
-    parser.add_argument(
-        "-b",
-        "--bash",
-        metavar="SCOPE",
+        "scope_or_prompt",
         nargs="?",
-        const="",
-        help="Enable bash mode and optionally restrict scope to SCOPE",
+        help="Optional file/directory scope or the beginning of the prompt",
     )
-    parser.add_argument("prompt", nargs="*", help="Prompt or edit instruction")
+    parser.add_argument(
+        "prompt",
+        nargs="*",
+        help="Additional prompt words",
+    )
     return parser.parse_args(argv)
 
 
@@ -538,7 +635,396 @@ def _coalesce_responses_text(response: Any) -> str:
     return _from_output(data).strip()
 
 
-def handle_edit_mode(
+def _make_user_message(text: str) -> Dict[str, Any]:
+    return {"role": "user", "content": [{"type": "input_text", "text": text}]}
+
+
+def _make_assistant_message(text: str) -> Dict[str, Any]:
+    return {"role": "assistant", "content": [{"type": "output_text", "text": text}]}
+
+
+def _make_tool_result_message(call_id: str, text: str) -> Dict[str, Any]:
+    return {
+        "type": "function_call_output",
+        "call_id": call_id,
+        "output": text,
+    }
+
+
+def _to_plain_data(obj: Any) -> Any:
+    if isinstance(obj, (str, int, float, bool)) or obj is None:
+        return obj
+    if isinstance(obj, dict):
+        return {key: _to_plain_data(value) for key, value in obj.items()}
+    if isinstance(obj, (list, tuple, set)):
+        return [_to_plain_data(value) for value in obj]
+    if hasattr(obj, "model_dump"):
+        return _to_plain_data(obj.model_dump())
+    if hasattr(obj, "dict"):
+        return _to_plain_data(obj.dict())
+    try:
+        iterable = iter(obj)  # type: ignore[arg-type]
+    except TypeError:
+        return str(obj)
+    else:
+        return [_to_plain_data(item) for item in iterable]
+
+
+def _convert_response_item(obj: Any) -> Dict[str, Any]:
+    data = _to_plain_data(obj)
+    if isinstance(data, dict):
+        return data
+    raise TypeError(f"Unable to convert response item of type {type(obj)!r} to dict")
+
+
+def _sanitize_reasoning_item(payload: Dict[str, Any]) -> Dict[str, Any]:
+    allowed_keys = {"type", "id", "content", "summary"}
+    sanitized: Dict[str, Any] = {}
+    for key in allowed_keys:
+        if key in payload and payload[key] is not None:
+            sanitized[key] = payload[key]
+    if "type" not in sanitized:
+        sanitized["type"] = "reasoning"
+    return sanitized
+
+
+def _make_tool_call_item(
+    *,
+    call_id: str,
+    tool_name: str,
+    arguments: Any,
+    raw_id: Any = None,
+) -> Dict[str, Any]:
+    serialized_arguments = arguments if isinstance(arguments, str) else json.dumps(arguments or {})
+    item: Dict[str, Any] = {
+        "type": "function_call",
+        "call_id": call_id,
+        "name": tool_name,
+        "arguments": serialized_arguments,
+    }
+    if raw_id is not None:
+        item["id"] = str(raw_id)
+    return item
+
+
+def _detect_generated_files(message: str) -> list[tuple[str, str]]:
+    pattern = re.compile(
+        r"(?:save|write|create|add|generate|produce)[^\n]{0,160}?\b(?:as|to|in)\s+`?([A-Za-z0-9._\-/]+)`?(?::)?",
+        re.IGNORECASE,
+    )
+    lines = message.splitlines()
+    i = 0
+    results: list[tuple[str, str]] = []
+    while i < len(lines):
+        match = pattern.search(lines[i])
+        if not match:
+            i += 1
+            continue
+
+        filename = match.group(1).strip().rstrip(':').strip()
+        j = i + 1
+        while j < len(lines) and not lines[j].startswith("```"):
+            j += 1
+        if j >= len(lines):
+            i += 1
+            continue
+        fence_language = lines[j]
+        j += 1
+        start = j
+        while j < len(lines) and not lines[j].startswith("```"):
+            j += 1
+        if j >= len(lines):
+            break
+        content = "\n".join(lines[start:j]).rstrip()
+        results.append((filename, content))
+        i = j + 1
+    return results
+
+
+def _review_and_apply_file_update(
+    base_root: Path,
+    default_root: Path,
+    filename: str,
+    content: str,
+    *,
+    auto_apply: bool = False,
+) -> str:
+    path = Path(filename)
+    if not path.is_absolute():
+        path = (default_root / path).resolve()
+    else:
+        path = path.resolve()
+
+    try:
+        relative = path.relative_to(base_root)
+    except ValueError:
+        print(f"[skip] refusing to modify outside project root: {path}")
+        return "skipped_out_of_scope"
+
+    try:
+        old_text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        old_text = ""
+    except Exception as exc:
+        print(f"[skip] failed to read {relative}: {exc}")
+        return f"error: failed to read {relative}: {exc}"
+
+    diff_lines = list(
+        difflib.unified_diff(
+            old_text.splitlines(),
+            content.splitlines(),
+            fromfile=str(relative),
+            tofile=f"{relative} (proposed)",
+            lineterm="",
+        )
+    )
+
+    if not diff_lines:
+        print(f"[skip] {relative}: no changes detected")
+        return "no_change"
+
+    print(add_line_numbers_to_diff(diff_lines))
+
+    if auto_apply:
+        print(f"[auto] applying changes to {relative}")
+        normalized = "y"
+    else:
+        try:
+            confirmation_raw = input(f"Apply changes to {relative}? [y/N]: ").strip().lower()
+        except KeyboardInterrupt:
+            print("\nInterrupted while awaiting confirmation.")
+            raise
+        normalized = re.sub(r"[^a-z]", "", confirmation_raw)
+
+    positive = {
+        "y",
+        "yes",
+        "ok",
+        "okay",
+        "sure",
+        "apply",
+        "add",
+        "addit",
+        "create",
+        "commit",
+        "confirm",
+        "doit",
+        "do",
+        "write",
+        "writeit",
+        "save",
+    }
+
+    if normalized not in positive:
+        print(f"[skip] {relative}")
+        return "user_rejected"
+
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content + ("\n" if not content.endswith("\n") else ""), encoding="utf-8")
+        os.chmod(path, 0o644)
+        print(f"[applied] {relative}")
+    except Exception as exc:
+        print(f"[error] failed to write {relative}: {exc}")
+        return f"error: failed to write {relative}: {exc}"
+
+    return "applied"
+
+
+def _instruction_implies_write(text: str) -> bool:
+    normalized = text.lower()
+    return bool(
+        re.search(
+            r"\b(write|create|add|generate|produce|save|append|commit|apply|patch|update|make|build|draft|add it|addit|writeit)\b",
+            normalized,
+        )
+    )
+
+
+def _handle_tool_call(
+    tool_name: str,
+    arguments: Any,
+    *,
+    base_root: Path,
+    default_root: Path,
+    config: Dict[str, Any],
+    plan_state: Dict[str, Any],
+    latest_instruction: str,
+) -> tuple[str, bool]:
+    try:
+        if isinstance(arguments, str):
+            args = json.loads(arguments) if arguments else {}
+        elif isinstance(arguments, dict):
+            args = arguments
+        else:
+            args = {}
+    except json.JSONDecodeError as exc:
+        print(f"[tool-call] {tool_name}: failed to decode arguments: {exc}")
+        return f"error: invalid arguments JSON ({exc})", False
+
+    mutated = False
+    if tool_name in {"write", "write_file"}:
+        print(f"[tool-call] {tool_name}: parsed args={args}")
+
+    if tool_name == "read_file":
+        path_arg = args.get("path")
+        if not path_arg:
+            return "error: missing path", False
+        path = Path(path_arg)
+        if not path.is_absolute():
+            path = (default_root / path).resolve()
+        else:
+            path = path.resolve()
+        try:
+            path.relative_to(base_root)
+        except ValueError:
+            return f"error: path outside project root ({path})", False
+
+        limit = int(args.get("limit", 8000) or 8000)
+        offset = int(args.get("offset", 0) or 0)
+        try:
+            data = path.read_text(encoding="utf-8", errors="replace")
+        except Exception as exc:
+            return f"error: failed to read {path}: {exc}", False
+
+        snippet = data[offset : offset + limit]
+        preview = f"Contents of {path.relative_to(base_root)}\n```\n{snippet}\n```"
+        print(preview)
+        return preview, False
+
+    if tool_name in {"write", "write_file"}:
+        path_arg = args.get("filePath") or args.get("path")
+        contents = args.get("content")
+        if contents is None:
+            contents = args.get("contents")
+        if not path_arg or contents is None:
+            return "error: missing file path or contents", False
+        auto_apply = _instruction_implies_write(latest_instruction)
+        status = _review_and_apply_file_update(
+            base_root,
+            default_root,
+            path_arg,
+            contents,
+            auto_apply=auto_apply,
+        )
+        mutated = status == "applied"
+        if status == "applied":
+            try:
+                target_path = Path(path_arg).expanduser()
+                if not target_path.is_absolute():
+                    target_path = (default_root / target_path).resolve()
+                else:
+                    target_path = target_path.resolve()
+                relative = target_path.relative_to(base_root)
+                status_message = f"success: wrote {relative}"
+            except Exception:
+                status_message = "success: wrote file"
+            print(f"[tool-call] {tool_name}: wrote file -> {status_message}")
+            return status_message, mutated
+        if status == "no_change":
+            print(f"[tool-call] {tool_name}: no change for {path_arg}")
+            return "no change", mutated
+        print(f"[tool-call] {tool_name}: status={status}")
+        return status, mutated
+
+    if tool_name == "apply_patch":
+        patch_text = args.get("patch") or args.get("input")
+        if not patch_text:
+            return "error: missing patch", False
+        print("# apply_patch proposal\n" + patch_text)
+        try:
+            confirmation = input("Apply patch? [y/N]: ").strip().lower()
+        except KeyboardInterrupt:
+            print("\nInterrupted while awaiting confirmation.")
+            raise
+        if confirmation not in {"y", "yes"}:
+            return "user_rejected", False
+        try:
+            proc = subprocess.run(
+                ["patch", "-p0", "--batch", "--forward"],
+                input=patch_text,
+                text=True,
+                cwd=base_root,
+                capture_output=True,
+            )
+        except FileNotFoundError:
+            return "error: 'patch' command not available", False
+        if proc.returncode != 0:
+            if proc.stdout:
+                print(proc.stdout)
+            if proc.stderr:
+                print(proc.stderr)
+            return f"error: patch failed (status {proc.returncode})", False
+        if proc.stdout:
+            print(proc.stdout)
+        return "applied", True
+
+    if tool_name == "shell":
+        command = args.get("command")
+        if isinstance(command, str):
+            command_str = command
+        elif isinstance(command, list):
+            command_str = " ".join(shlex.quote(str(part)) for part in command)
+        else:
+            return "error: invalid command; expected string or list", False
+
+        workdir_arg = args.get("workdir")
+        if workdir_arg:
+            workdir = Path(workdir_arg).expanduser()
+            if not workdir.is_absolute():
+                workdir = (default_root / workdir).resolve()
+        else:
+            workdir = default_root
+
+        try:
+            workdir.relative_to(base_root)
+        except ValueError:
+            return f"error: workdir outside project root ({workdir})", False
+
+        settings = config.get("bash_settings", {})
+        timeout_seconds = int(settings.get("max_seconds", 15) or 15)
+        max_output_bytes = int(settings.get("max_output_bytes", 20000) or 20000)
+        timeout_override = args.get("timeout_ms")
+        if timeout_override is not None:
+            try:
+                timeout_seconds = max(1, int(timeout_override) // 1000)
+            except Exception:
+                pass
+
+        try:
+            result = run_sandboxed_bash(
+                command_str,
+                cwd=workdir,
+                scope_root=base_root,
+                timeout=timeout_seconds,
+                max_output_bytes=max_output_bytes,
+            )
+            formatted = format_command_result(result)
+            print(formatted)
+            return formatted, False
+        except CommandRejected as exc:
+            message = f"command rejected: {exc}"
+            print(f"[shell] {message}")
+            return message, False
+
+    if tool_name == "update_plan":
+        plan = (args.get("plan") or "").strip()
+        explanation = (args.get("explanation") or "").strip()
+        plan_state["plan"] = plan
+        if plan:
+            print("# Updated Plan\n" + plan)
+        if explanation:
+            print("# Plan Explanation\n" + explanation)
+        response = "plan updated"
+        if explanation:
+            response += f"; notes: {explanation}"
+        return response, False
+
+    print(f"[tool-call] unknown tool '{tool_name}' with args={args}")
+    return f"error: unknown tool '{tool_name}'", False
+
+
+def run_codex_edit(
     path_str: str,
     instruction: str,
     model: str | None = None,
@@ -546,21 +1032,21 @@ def handle_edit_mode(
     baseline_text: str | None = None,
 ):
     target_path = Path(path_str).expanduser()
-    if not target_path.exists():
-        print(f"{target_path} doesn't exist. Check your spelling, hotshot.")
-        return 1
     if target_path.is_dir():
         print(f"{target_path} is a directory, not a file. Try harder.")
         return 1
 
-    try:
-        current_text = target_path.read_text(encoding="utf-8")
-    except UnicodeDecodeError:
-        print(f"{target_path} isn't UTF-8 text. I'm not hex-editing that for you.")
-        return 1
-    except OSError as exc:
-        print(f"Couldn't read {target_path}: {exc}")
-        return 1
+    if target_path.exists():
+        try:
+            current_text = target_path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            print(f"{target_path} isn't UTF-8 text. I'm not hex-editing that for you.")
+            return 1
+        except OSError as exc:
+            print(f"Couldn't read {target_path}: {exc}")
+            return 1
+    else:
+        current_text = ""
 
     base_text = current_text if baseline_text is None else baseline_text
 
@@ -635,30 +1121,15 @@ def handle_edit_mode(
         print("Model produced identical content. Nothing to do.")
         return 0
 
-    diff_lines = list(
-        difflib.unified_diff(
-            base_text.splitlines(),
-            proposed_text.splitlines(),
-            fromfile=str(target_path),
-            tofile=f"{target_path} (proposed)",
-            lineterm="",
-        )
+    status = _review_and_apply_file_update(
+        base_root=Path.cwd().resolve(),
+        default_root=target_path.parent,
+        filename=str(target_path),
+        content=proposed_text,
+        auto_apply=_instruction_implies_write(instruction),
     )
 
-    if not diff_lines:
-        print("No visible diff. Maybe your instruction was nonsense.")
-        return 0
-
-    diff_output = add_line_numbers_to_diff(diff_lines)
-    print(diff_output)
-
-    try:
-        confirmation = input("Apply changes? [y/N]: ").strip().lower()
-    except KeyboardInterrupt:
-        print("\nInterrupted. Exiting without changes.")
-        raise
-    if confirmation not in {"y", "yes"}:
-        print("Changes discarded. Maybe next time.")
+    if status == "user_rejected":
         try:
             extra_context = input("add_context >>> ").strip()
         except KeyboardInterrupt:
@@ -668,7 +1139,7 @@ def handle_edit_mode(
             combined_instruction = (
                 f"{instruction}\n\nAdditional context provided after review:\n{extra_context}"
             )
-            return handle_edit_mode(
+            return run_codex_edit(
                 path_str,
                 combined_instruction,
                 model=model,
@@ -677,19 +1148,9 @@ def handle_edit_mode(
             )
         return 0
 
-    final_text = proposed_text
-    if base_text.endswith("\n") and not final_text.endswith("\n"):
-        final_text += "\n"
-
-    try:
-        existing_mode = target_path.stat().st_mode
-        target_path.write_text(final_text, encoding="utf-8")
-        os.chmod(target_path, existing_mode)
-    except Exception as exc:
-        print(f"Failed to write {target_path}: {exc}")
+    if status.startswith("error"):
         return 1
 
-    print(f"Applied changes to {target_path}.")
     return 0
 
 
@@ -719,10 +1180,10 @@ def _resolve_scope(scope: str | None, repo_root: Path) -> tuple[Path, Path, str]
     return candidate.parent, candidate.parent, label
 
 
-def run_bash_mode(prompt: str, scope: str | None, config: Dict[str, Any]) -> int:
+def run_codex_conversation(prompt: str, scope: str | None, config: Dict[str, Any]) -> int:
     raw_prompt = (prompt or "").strip()
     if not raw_prompt:
-        print("Provide a question for bash mode.")
+        print("Provide a question or instruction.")
         return 1
 
     repo_root = Path.cwd().resolve()
@@ -736,10 +1197,11 @@ def run_bash_mode(prompt: str, scope: str | None, config: Dict[str, Any]) -> int
         return 1
 
     collected = collect_context(scope_root)
-    context_text = format_context(collected)
+    display_text = format_context_for_display(collected)
+    prompt_context = format_context_for_prompt(collected)
 
     print("# Collected Context")
-    print(context_text)
+    print(display_text)
 
     model = resolve_model("bash", config)
     api_key_value = resolve_api_key(config=config)
@@ -751,49 +1213,186 @@ def run_bash_mode(prompt: str, scope: str | None, config: Dict[str, Any]) -> int
 
     system_prompt = textwrap.dedent(
         f"""
-        You are Codex CLI operating locally. You have already inspected the repository
-        using trusted tools, and you now have a snapshot of key files (directory tree,
-        README, main entry points). Use this evidence to answer the user's question.
+        You are Codex CLI operating locally. You can call tools to read files, write files,
+        update plans, or execute sandboxed shell commands. IMPORTANT: when you need to
+        create or modify files you MUST call the `write` tool (alias: `write_file`) with the full content (not apply_patch). Do not
+        claim success unless the tool call succeeds. Maintain an explicit plan when useful
+        using `update_plan`. Always cite relevant files.
         {scope_sentence}
         """
     ).strip()
 
-    prompt_payload = textwrap.dedent(
-        f"""
-        ## Repository Snapshot
-        {context_text}
+    conversation_items: List[Dict[str, Any]] = []
+    plan_state: Dict[str, Any] = {"plan": None}
+    latest_instruction = raw_prompt
+    pending_user_message: str | None = "\n".join(
+        [
+            "Repository snapshot:",
+            prompt_context,
+            "",
+            "Task:",
+            raw_prompt,
+            "",
+            "If files must change, call `write` (or `write_file`) with the full content and wait for confirmation.",
+        ]
+    )
+    pending_context_update: str | None = None
+    context_dirty = False
 
-        ## Task
-        {raw_prompt}
+    while True:
+        if context_dirty:
+            collected = collect_context(scope_root)
+            prompt_context = format_context_for_prompt(collected)
+            pending_context_update = prompt_context
+            context_dirty = False
 
-        Provide a concise yet thorough response citing the relevant files you used.
-        """
-    ).strip()
+        if pending_context_update:
+            conversation_items.append(
+                _make_user_message("Updated repository snapshot:\n" + pending_context_update)
+            )
+            pending_context_update = None
 
-    try:
-        with client.responses.stream(
-            model=model,
-            instructions=system_prompt,
-            input=[
-                {
-                    "role": "user",
-                    "content": [{"type": "input_text", "text": prompt_payload}],
-                }
-            ],
-        ) as stream:
-            for event in stream:
-                if getattr(event, "type", "") == "response.output_text.delta":
-                    chunk = getattr(event, "delta", "")
-                    if chunk:
-                        print(chunk, end="", flush=True)
-            print()
-        return 0
-    except KeyboardInterrupt:
-        print("\nInterrupted by user.")
-        return 130
-    except Exception as exc:  # pragma: no cover - network issues
-        print(f"Error: {exc}")
-        return 1
+        if pending_user_message:
+            conversation_items.append(_make_user_message(pending_user_message))
+            pending_user_message = None
+
+        try:
+            conversation_payload: Any = conversation_items
+            tools_payload: Any = TOOL_DEFINITIONS
+            response = client.responses.create(
+                model=model,
+                instructions=system_prompt,
+                input=conversation_payload,
+                tools=tools_payload,
+                tool_choice="auto",
+            )
+        except KeyboardInterrupt:
+            print("\nInterrupted by user.")
+            return 130
+        except Exception as exc:  # pragma: no cover - network issues
+            print(f"Error: {exc}")
+            return 1
+
+        tool_call_handled = False
+        assistant_messages: list[str] = []
+
+        for item in getattr(response, "output", []) or []:
+            item_type = getattr(item, "type", "")
+            debug_info = {
+                "type": item_type,
+                "id": getattr(item, "id", None),
+                "call_id": getattr(item, "call_id", None),
+                "name": getattr(item, "name", None),
+            }
+            try:
+                print("[debug] response item " + json.dumps(debug_info, default=str))
+            except Exception:
+                print(f"[debug] response item type={item_type}")
+
+            if item_type == "message":
+                text_parts: list[str] = []
+                for block in getattr(item, "content", []) or []:
+                    if getattr(block, "type", "").endswith("text"):
+                        text_parts.append(getattr(block, "text", ""))
+                text = "".join(text_parts).strip()
+                if text:
+                    assistant_messages.append(text)
+                    conversation_items.append(_make_assistant_message(text))
+            elif item_type in {"tool_call", "function_call"}:
+                raw_item_id = getattr(item, "id", None)
+                raw_call_id = getattr(item, "call_id", None) or raw_item_id
+                tool_name = getattr(item, "name", "")
+                call_id = str(raw_call_id or f"tool-{tool_name}")
+                arguments_payload = _to_plain_data(getattr(item, "arguments", {}))
+                conversation_items.append(
+                    _make_tool_call_item(
+                        call_id=call_id,
+                        tool_name=tool_name,
+                        arguments=arguments_payload,
+                        raw_id=raw_item_id,
+                    )
+                )
+                result_text, mutated = _handle_tool_call(
+                    tool_name,
+                    arguments_payload,
+                    base_root=repo_root,
+                    default_root=scope_root if scope else repo_root,
+                    config=config,
+                    plan_state=plan_state,
+                    latest_instruction=latest_instruction,
+                )
+                conversation_items.append(_make_tool_result_message(call_id, result_text))
+                if mutated:
+                    context_dirty = True
+                tool_call_handled = True
+
+            elif item_type == "custom_tool_call":
+                tool_name = getattr(item, "name", "")
+                print(f"[tool-call] unsupported custom tool '{tool_name}' requested; ignoring")
+                tool_call_handled = True
+
+            elif item_type == "reasoning":
+                try:
+                    reasoning_payload = _convert_response_item(item)
+                except TypeError as exc:
+                    print(f"[tool-call] failed to serialize reasoning item: {exc}")
+                    reasoning_payload = None
+                if reasoning_payload:
+                    conversation_items.append(_sanitize_reasoning_item(reasoning_payload))
+                summary = getattr(item, "summary", None)
+                if summary:
+                    reasoning_text = getattr(summary, "text", "") if hasattr(summary, "text") else summary
+                    if reasoning_text:
+                        print(f"# Reasoning\n{reasoning_text}\n")
+
+        if tool_call_handled:
+            continue
+
+        manual_mutation = False
+        if assistant_messages:
+            for message in assistant_messages:
+                print(message)
+                for filename, content in _detect_generated_files(message):
+                    status = _review_and_apply_file_update(
+                        base_root=repo_root,
+                        default_root=scope_root if scope else repo_root,
+                        filename=filename,
+                        content=content,
+                        auto_apply=_instruction_implies_write(latest_instruction),
+                    )
+                    if status == "applied":
+                        manual_mutation = True
+                    elif status.startswith("error"):
+                        print(status)
+        if manual_mutation:
+            context_dirty = True
+
+        if assistant_messages and not manual_mutation:
+            maybe_creation_claim = any(
+                re.search(r"\b(created|saved|written|added|generated)\b", msg, re.IGNORECASE)
+                for msg in assistant_messages
+            )
+            if maybe_creation_claim:
+                pending_user_message = (
+                    "It appears no files changed. Please call the `write` tool (alias: `write_file`) with the full contents so the file can be created."
+                )
+                continue
+
+        try:
+            follow_up = input("follow_up >>> ").strip()
+        except KeyboardInterrupt:
+            print("\nInterrupted by user.")
+            return 130
+
+        if not follow_up:
+            return 0
+
+        latest_instruction = follow_up
+        pending_user_message = (
+            "Follow-up instruction:\n"
+            + follow_up
+            + "\n\nReminder: use the `write` tool (or `write_file`) with full file contents when files must change."
+        )
 
 
 def main(argv=None):
@@ -807,48 +1406,38 @@ def main(argv=None):
 
     args = parse_args(arg_list)
 
-    if getattr(args, "bash", None) is not None and args.edit:
-        print("Cannot combine -b/--bash with -e/--edit.", file=sys.stderr)
+    scope_candidate = args.scope_or_prompt
+    prompt_components = list(args.prompt)
+    scope_arg: str | None = None
+
+    if scope_candidate:
+        candidate_path = Path(scope_candidate).expanduser()
+        if candidate_path.exists():
+            scope_arg = str(candidate_path)
+            if candidate_path.is_file():
+                prompt_text = " ".join(prompt_components).strip()
+                if not prompt_text:
+                    print("Provide an instruction after the file path.")
+                    return 1
+                return run_codex_edit(scope_arg, prompt_text, config=config)
+            else:
+                # directory scope
+                prompt_text = " ".join(prompt_components).strip()
+                if not prompt_text:
+                    print("Provide a question or instruction.")
+                    return 1
+                return run_codex_conversation(prompt_text, scope_arg, config)
+        else:
+            prompt_components.insert(0, scope_candidate)
+
+    prompt_text = " ".join(prompt_components).strip()
+    if not prompt_text:
+        _print_help()
         return 1
 
-    if args.edit:
-        instruction = " ".join(args.prompt).strip()
-        if not instruction:
-            print("Give me an instruction after the file path, pal.")
-            return 1
-        return handle_edit_mode(args.edit, instruction, config=config)
+    return run_codex_conversation(prompt_text, scope_arg, config)
 
-    if getattr(args, "bash", None) is not None:
-        scope_arg = args.bash or None
-        prompt_tokens = args.prompt
-        if prompt_tokens:
-            prompt_text = " ".join(prompt_tokens).strip()
-        else:
-            prompt_text = ""
-        if not prompt_text:
-            prompt_text = (scope_arg or "").strip()
-            scope_arg = None
-        return run_bash_mode(prompt_text, scope_arg, config)
-
-    prompt = " ".join(args.prompt).strip()
-    if prompt:
-        chat = AIChat(config=config, mode="prompt")
-        appended_prompt = (
-            f"{prompt}\n\nRespond as concisely as possible in less than 200 words."
-        )
-        chat.messages.append({"role": "user", "content": appended_prompt})
-        try:
-            chat.stream_response(show_loader=True, use_color=False)
-        except Exception as e:
-            print(f"Error: {str(e)}. Sort your dependencies or network, dammit.")
-            chat.cleanup_history_file()
-            return 1
-        else:
-            chat.cleanup_history_file()
-            return 0
-
-    chat = AIChat(config=config)
-    chat.run()
+    # Unreachable due to early returns, but keep explicit guard.
     return 0
 
 

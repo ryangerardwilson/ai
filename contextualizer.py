@@ -96,7 +96,28 @@ def collect_context(scope: Path, limit_bytes: int = DEFAULT_FILE_BYTES) -> Colle
     return CollectedContext(scope_root=scope_root, listing=listing, files=files)
 
 
-def format_context(collected: CollectedContext) -> str:
+def format_context_for_prompt(collected: CollectedContext) -> str:
+    blocks: List[str] = []
+    rel_root = collected.scope_root
+    blocks.append("## Directory Listing")
+    for line in collected.listing:
+        blocks.append(f"- {line}")
+
+    for path, text, truncated in collected.files:
+        rel_path = path.relative_to(rel_root)
+        blocks.append("")
+        header = f"### File: {rel_path}"
+        if truncated:
+            header += " (truncated)"
+        blocks.append(header)
+        blocks.append("```")
+        blocks.append(text)
+        blocks.append("```")
+
+    return "\n".join(blocks)
+
+
+def format_context_for_display(collected: CollectedContext) -> str:
     blocks: List[str] = []
     rel_root = collected.scope_root
     blocks.append("## Directory Listing")

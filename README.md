@@ -1,6 +1,6 @@
 # ai
 
-`ai` is a blunt, Vim-friendly terminal companion built on the OpenAI API. Launch it to chat in a dedicated TUI loop, fire off one-shot prompts, or hand it a file to rewrite while keeping eyes on the diff. Everything runs from a single binary with explicit controls for upgrades and versioning.
+`ai` is a blunt, Codex-inspired terminal companion built on the OpenAI API. Launch it to analyze a repository snapshot, iterate on follow-up questions, or hand it a file to rewrite while keeping eyes on the diff. Everything runs from a single binary with explicit controls for upgrades and versioning.
 
 ---
 
@@ -39,21 +39,18 @@ python main.py
 
 ## Usage
 
-- `ai` — launch the interactive chat loop (Vim opens your scratch buffer for prompts).
-- `ai "how do I write a release workflow?"` — send a one-off prompt; the reply prints to stdout.
-- `ai -e path/to/file.py "replace legacy API usage"` — rewrite a file, inspect the diff, and apply if you confirm.
-- If you decline the proposed rewrite, `ai` simply asks for extra context so you can retry the edit immediately.
-- `ai -b "what is the objective of this repo"` — enter bash mode; the assistant can inspect files via safe shell commands and summarize findings.
-- `ai -b docs/architecture "summarize these docs"` — limit bash mode to the `docs/architecture` directory while answering.
-- In bash mode the model can request tools by printing directives in its response:
-  - `RUN: <command>` executes a read-only shell command (e.g., `RUN: ls`).
-  - `READ: path/to/file` streams file contents (with truncation safeguards).
-  - `GREP: pattern :: path/to/file` returns regex matches with line numbers.
+- `ai` — analyze the current repository and start an interactive Q&A conversation (use the `follow_up >>>` prompt to continue, or press Enter to finish).
+- `ai "how do I write a release workflow?"` — run a one-off prompt; the assistant answers once and exits.
+- `ai path/to/file.py "replace legacy API usage"` — review the proposed diff for that file and confirm (or supply more context to retry).
+- `ai "what is the objective of this repo"` — summarize the repository snapshot and cite relevant files.
+- `ai docs/architecture "summarize these docs"` — limit the analysis to the `docs/architecture` directory before answering.
+- When the assistant provides file contents, the CLI shows a unified diff for each file and asks for confirmation before writing; approved files are created or updated immediately.
+- Behind the scenes the assistant uses Codex-like tools (`read_file`, `write_file`, `update_plan`, `shell`). You’ll see plan updates, command output, and diff prompts as those tools run.
 - `ai -v` — print the installed version.
 - `ai -u` — rerun the installer script if a newer release exists.
 - `ai -h` — show the CLI help summary.
 
-Interactive mode keeps a temporary transcript under `/tmp`, streams assistant output live, and cleans itself up when you exit. Editing mode streams a proposed diff, asks for confirmation, and preserves permissions on write.
+Each response streams live to your terminal, followed by the `follow_up >>>` prompt so you can iterate. Editing mode (triggered by a file scope or a conversation-generated file) shows a unified diff and preserves permissions when you approve the change.
 
 ---
 
