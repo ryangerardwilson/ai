@@ -48,7 +48,8 @@ python main.py
 
 - `ai` — analyze the current repository and start an interactive Q&A conversation (use the `QR >` prompt to continue, or press Enter to finish).
 - `ai "how do I write a release workflow?"` — run a one-off prompt; the assistant answers once and exits.
-- `ai path/to/file.py "replace legacy API usage"` — review the proposed diff for that file and confirm (or supply more context to retry).
+- `ai path/to/file.py "replace legacy API usage"` — trigger file-edit mode: the model rewrites the file, you review the diff, and confirm or reject the change.
+- `ai path/to/directory "summarize the services"` — scope the conversation to that directory; the assistant gathers context from the subtree before replying.
 - `ai "what is the objective of this repo"` — summarize the repository snapshot and cite relevant files.
 - `ai docs/architecture "summarize these docs"` — limit the analysis to the `docs/architecture` directory before answering.
 - `ai --read path/to/file.py --offset 400 --limit 200` — preview a specific slice of a file (line numbers mirror the assistant’s context hints).
