@@ -285,8 +285,11 @@ class AIEngine:
         )
         pending_context_update: Optional[str] = None
         context_dirty = False
+        warned_no_write = False
 
         while True:
+            rendered_messages: set[str] = set()
+            displayed_current_cycle = False
             if context_dirty:
                 collected = collect_context(
                     scope_root,
@@ -398,8 +401,10 @@ class AIEngine:
 
             manual_mutation = False
             for message in assistant_messages:
-                if message != previous_message:
+                if message not in rendered_messages and not displayed_current_cycle:
                     self.renderer.display_assistant_message(message)
+                    rendered_messages.add(message)
+                    displayed_current_cycle = True
                 previous_message = message
                 for filename, content in self._detect_generated_files(message):
                     status = self._apply_file_update(
@@ -415,9 +420,10 @@ class AIEngine:
                         self.renderer.display_error(status)
             if manual_mutation:
                 context_dirty = True
+                warned_no_write = False
 
             if assistant_messages and not manual_mutation:
-                if any(
+                if not warned_no_write and any(
                     re.search(
                         r"\b(created|saved|written|added|generated)\b", msg, re.IGNORECASE
                     )
@@ -426,6 +432,7 @@ class AIEngine:
                     pending_user_message = (
                         "It appears no files changed. Please call the `write` tool (alias: `write_file`) with the full contents so the file can be created."
                     )
+                    warned_no_write = True
                     continue
 
             follow_up = self.renderer.prompt_follow_up()
@@ -434,6 +441,8 @@ class AIEngine:
             follow_up = follow_up.strip()
             if not follow_up:
                 return 0
+
+            warned_no_write = False
 
             latest_instruction = follow_up
             pending_user_message = (
