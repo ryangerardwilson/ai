@@ -14,7 +14,7 @@
 | Flow | Invocation Example | Description | Key Sources |
 | --- | --- | --- | --- |
 | Interactive conversation | `ai` | Analyze the current repository,
-stream answers, and accept iterative `QR >` prompts. |
+stream answers, accept iterative `QR >` prompts, and support buffered `!command` shell execution whose output is injected with your next instruction. |
 [README.md](README.md), [main.py](main.py) | | Prompt-only run | `ai "how do I
 write a release workflow?"` | Execute a single inference without entering
 follow-up mode. | [README.md](README.md), [main.py](main.py) | | File rewrite

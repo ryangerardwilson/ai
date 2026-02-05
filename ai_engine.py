@@ -289,6 +289,8 @@ class AIEngine:
         pending_context_update: Optional[str] = None
         context_dirty = False
         warned_no_write = False
+        buffered_shell_messages: List[str] = []
+        skip_model_request = False
 
         while True:
             rendered_messages: set[str] = set()
@@ -314,95 +316,99 @@ class AIEngine:
                 conversation_items.append(self._make_user_message(pending_user_message))
                 pending_user_message = None
 
-            self.renderer.start_loader()
             conversation_payload = cast(Any, conversation_items)
             tools_payload = cast(Any, TOOL_DEFINITIONS)
-            try:
-                response = self.client.responses.create(
-                    model=model_id,
-                    instructions=system_prompt,
-                    input=conversation_payload,
-                    tools=tools_payload,
-                    tool_choice="auto",
-                )
-            except KeyboardInterrupt:
-                self.renderer.display_info("\nInterrupted by user.")
-                return 130
-            except Exception as exc:
-                self.renderer.display_error(f"Error: {exc}")
-                return 1
-            finally:
-                self.renderer.stop_loader()
-
             tool_call_handled = False
             assistant_messages: list[str] = []
             previous_message: Optional[str] = None
             pending_reasoning_queue: list[Dict[str, Any]] = []
 
-            for item in getattr(response, "output", []) or []:
-                item_type = getattr(item, "type", "")
-
-                if item_type == "message":
-                    text_parts: List[str] = []
-                    for block in getattr(item, "content", []) or []:
-                        if getattr(block, "type", "").endswith("text"):
-                            text_parts.append(getattr(block, "text", ""))
-                    text = "".join(text_parts).strip()
-                    pending_reasoning_queue.clear()
-                    if text:
-                        assistant_messages.append(text)
-                        conversation_items.append(self._make_assistant_message(text))
-
-                elif item_type in {"tool_call", "function_call"}:
-                    item_payload = self._convert_response_item(item)
-                    raw_item_id = getattr(item, "id", None)
-                    raw_call_id = getattr(item, "call_id", None) or raw_item_id
-                    tool_name = getattr(item, "name", "")
-                    call_id = str(raw_call_id or f"tool-{tool_name}")
-                    arguments_payload = item_payload.get("arguments", {})
-                    if pending_reasoning_queue:
-                        conversation_items.append(pending_reasoning_queue.pop(0))
-                    conversation_items.append(
-                        self._make_tool_call_item(
-                            call_id=call_id,
-                            tool_name=tool_name,
-                            arguments=arguments_payload,
-                            raw_id=raw_item_id,
-                        )
+            if skip_model_request:
+                skip_model_request = False
+            else:
+                self.renderer.start_loader()
+                try:
+                    response = self.client.responses.create(
+                        model=model_id,
+                        instructions=system_prompt,
+                        input=conversation_payload,
+                        tools=tools_payload,
+                        tool_choice="auto",
                     )
-                    result_text, mutated = self._handle_tool_call(
-                        tool_name,
-                        arguments_payload,
-                        base_root=repo_root,
-                        default_root=scope_root if scope else repo_root,
-                        plan_state=plan_state,
-                        latest_instruction=latest_instruction,
-                    )
-                    conversation_items.append(self._make_tool_result_message(call_id, result_text))
-                    if mutated:
-                        context_dirty = True
-                    tool_call_handled = True
+                except KeyboardInterrupt:
+                    self.renderer.display_info("\nInterrupted by user.")
+                    return 130
+                except Exception as exc:
+                    self.renderer.display_error(f"Error: {exc}")
+                    return 1
+                finally:
+                    self.renderer.stop_loader()
 
-                elif item_type == "reasoning":
-                    reasoning_payload = self._convert_response_item(item)
-                    sanitized = {
-                        key: value
-                        for key, value in reasoning_payload.items()
-                        if key in {"type", "id", "summary", "content"} and value is not None
-                    }
-                    sanitized.setdefault("type", "reasoning")
-                    pending_reasoning_queue.append(sanitized)
-                    summary = getattr(item, "summary", None)
-                    if summary:
-                        reasoning_text = (
-                            getattr(summary, "text", "")
-                            if hasattr(summary, "text")
-                            else summary
+                for item in getattr(response, "output", []) or []:
+                    item_type = getattr(item, "type", "")
+
+                    if item_type == "message":
+                        text_parts: List[str] = []
+                        for block in getattr(item, "content", []) or []:
+                            if getattr(block, "type", "").endswith("text"):
+                                text_parts.append(getattr(block, "text", ""))
+                        text = "".join(text_parts).strip()
+                        pending_reasoning_queue.clear()
+                        if text:
+                            assistant_messages.append(text)
+                            conversation_items.append(self._make_assistant_message(text))
+
+                    elif item_type in {"tool_call", "function_call"}:
+                        item_payload = self._convert_response_item(item)
+                        raw_item_id = getattr(item, "id", None)
+                        raw_call_id = getattr(item, "call_id", None) or raw_item_id
+                        tool_name = getattr(item, "name", "")
+                        call_id = str(raw_call_id or f"tool-{tool_name}")
+                        arguments_payload = item_payload.get("arguments", {})
+                        if pending_reasoning_queue:
+                            conversation_items.append(pending_reasoning_queue.pop(0))
+                        conversation_items.append(
+                            self._make_tool_call_item(
+                                call_id=call_id,
+                                tool_name=tool_name,
+                                arguments=arguments_payload,
+                                raw_id=raw_item_id,
+                            )
                         )
-                        if reasoning_text:
-                            self.renderer.display_reasoning(reasoning_text)
+                        result_text, mutated = self._handle_tool_call(
+                            tool_name,
+                            arguments_payload,
+                            base_root=repo_root,
+                            default_root=scope_root if scope else repo_root,
+                            plan_state=plan_state,
+                            latest_instruction=latest_instruction,
+                        )
+                        conversation_items.append(self._make_tool_result_message(call_id, result_text))
+                        if mutated:
+                            context_dirty = True
+                        tool_call_handled = True
 
-            pending_reasoning_queue.clear()
+                    elif item_type == "reasoning":
+                        reasoning_payload = self._convert_response_item(item)
+                        sanitized = {
+                            key: value
+                            for key, value in reasoning_payload.items()
+                            if key in {"type", "id", "summary", "content"} and value is not None
+                        }
+                        sanitized.setdefault("type", "reasoning")
+                        pending_reasoning_queue.append(sanitized)
+                        summary = getattr(item, "summary", None)
+                        if summary:
+                            reasoning_text = (
+                                getattr(summary, "text", "")
+                                if hasattr(summary, "text")
+                                else summary
+                            )
+                            if reasoning_text:
+                                self.renderer.display_reasoning(reasoning_text)
+
+                pending_reasoning_queue.clear()
+            # end if not skip_model_request
 
             if tool_call_handled:
                 continue
@@ -452,7 +458,44 @@ class AIEngine:
 
             warned_no_write = False
 
+            if follow_up.startswith("!"):
+                command_text = follow_up[1:].strip()
+                if not command_text:
+                    continue
+
+                try:
+                    result = run_sandboxed_bash(
+                        command_text,
+                        cwd=scope_root if scope else repo_root,
+                        scope_root=repo_root,
+                        timeout=30,
+                        max_output_bytes=20000,
+                    )
+                    formatted = format_command_result(result)
+                    self.renderer.display_shell_output(formatted)
+                    preview_message = (
+                        "Executed shell command: `"
+                        + command_text
+                        + "`\n"
+                        + "Output:\n```\n"
+                        + formatted
+                        + "\n```"
+                    )
+                    buffered_shell_messages.append(preview_message)
+                    skip_model_request = True
+                except CommandRejected as exc:
+                    self.renderer.display_error(f"command rejected: {exc}")
+                except Exception as exc:
+                    self.renderer.display_error(f"error running command: {exc}")
+                continue
+
+            warned_no_write = False
+
             latest_instruction = follow_up
+            if buffered_shell_messages:
+                for msg in buffered_shell_messages:
+                    conversation_items.append(self._make_user_message(msg))
+                buffered_shell_messages.clear()
             pending_user_message = (
                 "Follow-up instruction:\n"
                 + follow_up
