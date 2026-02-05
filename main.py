@@ -683,8 +683,7 @@ def _sanitize_reasoning_item(payload: Dict[str, Any]) -> Dict[str, Any]:
     for key in allowed_keys:
         if key in payload and payload[key] is not None:
             sanitized[key] = payload[key]
-    if "type" not in sanitized:
-        sanitized["type"] = "reasoning"
+    sanitized.setdefault("type", "reasoning")
     return sanitized
 
 
@@ -694,6 +693,7 @@ def _make_tool_call_item(
     tool_name: str,
     arguments: Any,
     raw_id: Any = None,
+    reasoning_id: str | None = None,
 ) -> Dict[str, Any]:
     serialized_arguments = arguments if isinstance(arguments, str) else json.dumps(arguments or {})
     item: Dict[str, Any] = {
@@ -704,6 +704,8 @@ def _make_tool_call_item(
     }
     if raw_id is not None:
         item["id"] = str(raw_id)
+    if reasoning_id:
+        item["reasoning_id"] = reasoning_id
     return item
 
 
@@ -1275,17 +1277,21 @@ def run_codex_conversation(prompt: str, scope: str | None, config: Dict[str, Any
 
         tool_call_handled = False
         assistant_messages: list[str] = []
+        pending_reasoning: Dict[str, Dict[str, Any]] = {}
 
         for item in getattr(response, "output", []) or []:
             item_type = getattr(item, "type", "")
-            debug_info = {
+            debug_payload = {
                 "type": item_type,
                 "id": getattr(item, "id", None),
                 "call_id": getattr(item, "call_id", None),
                 "name": getattr(item, "name", None),
             }
+            reasoning_ref = getattr(item, "reasoning_id", None)
+            if reasoning_ref:
+                debug_payload["reasoning_id"] = reasoning_ref
             try:
-                print("[debug] response item " + json.dumps(debug_info, default=str))
+                print("[debug] response item " + json.dumps(debug_payload, default=str))
             except Exception:
                 print(f"[debug] response item type={item_type}")
 
@@ -1299,17 +1305,38 @@ def run_codex_conversation(prompt: str, scope: str | None, config: Dict[str, Any
                     assistant_messages.append(text)
                     conversation_items.append(_make_assistant_message(text))
             elif item_type in {"tool_call", "function_call"}:
+                item_payload = _convert_response_item(item)
+                try:
+                    print("[debug] function_call payload " + json.dumps(item_payload, indent=2))
+                except Exception:
+                    print(f"[debug] function_call payload keys={list(item_payload.keys())}")
                 raw_item_id = getattr(item, "id", None)
                 raw_call_id = getattr(item, "call_id", None) or raw_item_id
                 tool_name = getattr(item, "name", "")
                 call_id = str(raw_call_id or f"tool-{tool_name}")
-                arguments_payload = _to_plain_data(getattr(item, "arguments", {}))
+                arguments_payload = item_payload.get("arguments", {})
+                reasoning_id = item_payload.get("reasoning_id")
+                if reasoning_id:
+                    pending = pending_reasoning.pop(str(reasoning_id), None)
+                    if pending:
+                        print(f"[debug] attaching reasoning {reasoning_id} to call {call_id}")
+                        conversation_items.append(pending)
+                else:
+                    # If the function call lacks a reasoning_id but we have exactly one pending
+                    # reasoning item, assume it belongs to this call.
+                    if len(pending_reasoning) == 1:
+                        guessed_reasoning_id, pending_item = pending_reasoning.popitem()
+                        print(
+                            f"[debug] attaching inferred reasoning {guessed_reasoning_id} to call {call_id}"
+                        )
+                        conversation_items.append(pending_item)
                 conversation_items.append(
                     _make_tool_call_item(
                         call_id=call_id,
                         tool_name=tool_name,
                         arguments=arguments_payload,
                         raw_id=raw_item_id,
+                        reasoning_id=reasoning_id,
                     )
                 )
                 result_text, mutated = _handle_tool_call(
@@ -1336,9 +1363,12 @@ def run_codex_conversation(prompt: str, scope: str | None, config: Dict[str, Any
                     reasoning_payload = _convert_response_item(item)
                 except TypeError as exc:
                     print(f"[tool-call] failed to serialize reasoning item: {exc}")
-                    reasoning_payload = None
-                if reasoning_payload:
-                    conversation_items.append(_sanitize_reasoning_item(reasoning_payload))
+                else:
+                    reasoning_id = str(reasoning_payload.get("id")) if reasoning_payload.get("id") else None
+                    if reasoning_id:
+                        sanitized = _sanitize_reasoning_item(reasoning_payload)
+                        pending_reasoning[reasoning_id] = sanitized
+                        print(f"[debug] queued reasoning {reasoning_id}")
                 summary = getattr(item, "summary", None)
                 if summary:
                     reasoning_text = getattr(summary, "text", "") if hasattr(summary, "text") else summary
