@@ -774,23 +774,12 @@ def _convert_response_item(obj: Any) -> Dict[str, Any]:
     raise TypeError(f"Unable to convert response item of type {type(obj)!r} to dict")
 
 
-def _sanitize_reasoning_item(payload: Dict[str, Any]) -> Dict[str, Any]:
-    allowed_keys = {"type", "id", "content", "summary"}
-    sanitized: Dict[str, Any] = {}
-    for key in allowed_keys:
-        if key in payload and payload[key] is not None:
-            sanitized[key] = payload[key]
-    sanitized.setdefault("type", "reasoning")
-    return sanitized
-
-
 def _make_tool_call_item(
     *,
     call_id: str,
     tool_name: str,
     arguments: Any,
     raw_id: Any = None,
-    reasoning_id: str | None = None,
 ) -> Dict[str, Any]:
     serialized_arguments = (
         arguments if isinstance(arguments, str) else json.dumps(arguments or {})
@@ -803,8 +792,6 @@ def _make_tool_call_item(
     }
     if raw_id is not None:
         item["id"] = str(raw_id)
-    if reasoning_id:
-        item["reasoning_id"] = reasoning_id
     return item
 
 
@@ -1395,11 +1382,9 @@ def run_codex_conversation(
 
         for item in getattr(response, "output", []) or []:
             item_type = getattr(item, "type", "")
+            # no debug
 
             if item_type == "message":
-                if pending_reasoning_queue:
-                    while pending_reasoning_queue:
-                        conversation_items.append(pending_reasoning_queue.pop(0))
                 text_parts: list[str] = []
                 for block in getattr(item, "content", []) or []:
                     if getattr(block, "type", "").endswith("text"):
@@ -1415,24 +1400,14 @@ def run_codex_conversation(
                 tool_name = getattr(item, "name", "")
                 call_id = str(raw_call_id or f"tool-{tool_name}")
                 arguments_payload = item_payload.get("arguments", {})
-                reasoning_id = item_payload.get("reasoning_id")
-                selected_reasoning = None
-                if reasoning_id:
-                    for idx, pending in enumerate(pending_reasoning_queue):
-                        if pending.get("id") == reasoning_id:
-                            selected_reasoning = pending_reasoning_queue.pop(idx)
-                            break
-                if selected_reasoning is None and pending_reasoning_queue:
-                    selected_reasoning = pending_reasoning_queue.pop(0)
-                if selected_reasoning:
-                    conversation_items.append(selected_reasoning)
+                if pending_reasoning_queue:
+                    conversation_items.append(pending_reasoning_queue.pop(0))
                 conversation_items.append(
                     _make_tool_call_item(
                         call_id=call_id,
                         tool_name=tool_name,
                         arguments=arguments_payload,
                         raw_id=raw_item_id,
-                        reasoning_id=reasoning_id,
                     )
                 )
                 result_text, mutated = _handle_tool_call(
@@ -1459,13 +1434,14 @@ def run_codex_conversation(
                 tool_call_handled = True
 
             elif item_type == "reasoning":
-                try:
-                    reasoning_payload = _convert_response_item(item)
-                except TypeError as exc:
-                    print(f"[tool-call] failed to serialize reasoning item: {exc}")
-                else:
-                    sanitized = _sanitize_reasoning_item(reasoning_payload)
-                    pending_reasoning_queue.append(sanitized)
+                raw_reasoning = _convert_response_item(item)
+                sanitized_reasoning: Dict[str, Any] = {
+                    key: value
+                    for key, value in raw_reasoning.items()
+                    if key in {"type", "id", "summary", "content"} and value is not None
+                }
+                sanitized_reasoning.setdefault("type", "reasoning")
+                pending_reasoning_queue.append(sanitized_reasoning)
                 summary = getattr(item, "summary", None)
                 if summary:
                     reasoning_text = (
@@ -1476,9 +1452,8 @@ def run_codex_conversation(
                     if reasoning_text:
                         print(f"# Reasoning\n{reasoning_text}\n")
 
-        if pending_reasoning_queue and not tool_call_handled:
-            while pending_reasoning_queue:
-                conversation_items.append(pending_reasoning_queue.pop(0))
+        if pending_reasoning_queue:
+            pending_reasoning_queue.clear()
 
         if tool_call_handled:
             continue
@@ -1518,6 +1493,9 @@ def run_codex_conversation(
         except KeyboardInterrupt:
             print("\nInterrupted by user.")
             return 130
+        except EOFError:
+            print()
+            return 0
 
         if not follow_up:
             return 0
