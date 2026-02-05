@@ -14,8 +14,8 @@ class CLIRenderer:
     """Console renderer for the ai CLI."""
 
     ANSI_WHITE = "\033[97m"
-    ANSI_MEDIUM_GRAY = "\033[90m"
-    ANSI_DIM_GRAY = "\033[2;37m"
+    ANSI_MEDIUM_GRAY = "\033[38;5;250m"
+    ANSI_DIM_GRAY = "\033[90m"
     ANSI_RESET = "\033[0m"
 
     def __init__(self, *, color_prefix: str = "\033[1;36m") -> None:
@@ -34,7 +34,7 @@ class CLIRenderer:
     def display_error(self, text: str) -> None:
         if text:
             if sys.stderr.isatty():
-                print(self._colorize(text, self.ANSI_DIM_GRAY), file=sys.stderr)
+                print(self._colorize(text, self.ANSI_MEDIUM_GRAY), file=sys.stderr)
             else:
                 print(text, file=sys.stderr)
 
@@ -161,12 +161,14 @@ class CLIRenderer:
 
         stop_event = threading.Event()
         frames = [
-            "on it   ◐◐◐",
-            "on it   ◓◓◓",
-            "on it   ◑◑◑",
-            "on it   ◒◒◒",
-            "on it   ◐◓◑",
-            "on it   ◓◑◒",
+            "◐" * 12,
+            "◓" * 12,
+            "◑" * 12,
+            "◒" * 12,
+            "◐◓◑◒◐◓◑◒◐◓◑◒",
+            "◓◑◒◐◓◑◒◐◓◑◒◐",
+            "◑◒◐◓◑◒◐◓◑◒◐◓",
+            "◒◐◓◑◒◐◓◑◒◐◓◑",
         ]
 
         def loader() -> None:
@@ -177,10 +179,10 @@ class CLIRenderer:
                 frame = frames[idx % len(frames)]
                 idx += 1
                 if self._supports_color:
-                    frame = f"{self.ANSI_MEDIUM_GRAY}{frame}{self.ANSI_RESET}"
-                print(f"\r{frame:<18}", end="", flush=True)
-                time.sleep(0.06)
-            print("\r" + " " * 18 + "\r", end="", flush=True)
+                    frame = f"{self.ANSI_WHITE}{frame}{self.ANSI_RESET}"
+                print(f"\r{frame:<24}", end="", flush=True)
+            time.sleep(0.06)
+            print("\r" + " " * 24 + "\r", end="", flush=True)
             if self._supports_color:
                 print("\033[?25h", end="", flush=True)
 
