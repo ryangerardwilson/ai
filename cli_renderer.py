@@ -7,7 +7,7 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import Iterable, Optional, List, Sequence
+from typing import Iterable, Optional, List
 
 try:  # Optional readline support for interactive prompts
     import readline as _readline
