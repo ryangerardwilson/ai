@@ -7,7 +7,7 @@ import shlex
 import subprocess
 import textwrap
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Protocol
+from typing import Any, Dict, Iterable, List, Optional, Protocol, cast
 
 import openai
 
@@ -177,6 +177,9 @@ class RendererProtocol(Protocol):
     def start_loader(self) -> tuple[Optional[object], Optional[object]]:
         ...
 
+    def stop_loader(self) -> None:
+        ...
+
 
 def resolve_api_key(candidate: str | None = None, config: Optional[Dict[str, Any]] = None) -> str:
     if candidate:
@@ -311,12 +314,15 @@ class AIEngine:
                 conversation_items.append(self._make_user_message(pending_user_message))
                 pending_user_message = None
 
+            self.renderer.start_loader()
+            conversation_payload = cast(Any, conversation_items)
+            tools_payload = cast(Any, TOOL_DEFINITIONS)
             try:
                 response = self.client.responses.create(
                     model=model_id,
                     instructions=system_prompt,
-                    input=conversation_items,
-                    tools=TOOL_DEFINITIONS,
+                    input=conversation_payload,
+                    tools=tools_payload,
                     tool_choice="auto",
                 )
             except KeyboardInterrupt:
@@ -325,6 +331,8 @@ class AIEngine:
             except Exception as exc:
                 self.renderer.display_error(f"Error: {exc}")
                 return 1
+            finally:
+                self.renderer.stop_loader()
 
             tool_call_handled = False
             assistant_messages: list[str] = []
@@ -488,12 +496,12 @@ class AIEngine:
             f"{current_text}"
         )
 
-        stop_event, loader_thread = self.renderer.start_loader()
+        self.renderer.start_loader()
         content = ""
 
         try:
             if self._is_responses_model(effective_model):
-                response = self.client.responses.create(
+                response = self.client.responses.create(  # type: ignore[arg-type]
                     model=effective_model,
                     input=f"{system_message}\n\n{user_message}",
                 )
@@ -514,12 +522,7 @@ class AIEngine:
             self.renderer.display_error(f"Error: {exc}. The API tripped over itself.")
             return 1
         finally:
-            if stop_event and loader_thread:
-                stop_event.set()
-                loader_thread.join()
-                print("\r    \r", end="", flush=True)
-            elif stop_event:
-                stop_event.set()
+            self.renderer.stop_loader()
 
         if not content:
             self.renderer.display_info("Model returned no content. Aborting.")

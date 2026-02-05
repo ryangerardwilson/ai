@@ -14,20 +14,22 @@ class CLIRenderer:
     """Console renderer for the ai CLI."""
 
     ANSI_WHITE = "\033[97m"
-    ANSI_MEDIUM_GRAY = "\033[37m"
-    ANSI_DIM_GRAY = "\033[90m"
+    ANSI_MEDIUM_GRAY = "\033[90m"
+    ANSI_DIM_GRAY = "\033[2;37m"
     ANSI_RESET = "\033[0m"
 
     def __init__(self, *, color_prefix: str = "\033[1;36m") -> None:
         self.color_prefix = color_prefix
         self._supports_color = sys.stdout.isatty()
+        self._loader_thread: Optional[threading.Thread] = None
+        self._loader_stop: Optional[threading.Event] = None
 
     # ------------------------------------------------------------------
     # Output helpers
     # ------------------------------------------------------------------
     def display_info(self, text: str) -> None:
         if text:
-            print(self._colorize(text, self.ANSI_DIM_GRAY))
+            print(self._colorize(text, self.ANSI_MEDIUM_GRAY))
 
     def display_error(self, text: str) -> None:
         if text:
@@ -42,17 +44,17 @@ class CLIRenderer:
 
     def display_assistant_message(self, text: str) -> None:
         if text:
-            print(self._colorize(text, self.ANSI_DIM_GRAY))
+            print(self._colorize(text, self.ANSI_MEDIUM_GRAY))
 
     def display_shell_output(self, text: str) -> None:
         if text:
-            print(self._colorize(text, self.ANSI_DIM_GRAY))
+            print(self._colorize(text, self.ANSI_MEDIUM_GRAY))
 
     def display_plan_update(self, plan: str, explanation: Optional[str]) -> None:
         if plan:
-            print(self._colorize("# Updated Plan\n" + plan, self.ANSI_DIM_GRAY))
+            print(self._colorize("# Updated Plan\n" + plan, self.ANSI_MEDIUM_GRAY))
         if explanation:
-            print(self._colorize("# Plan Explanation\n" + explanation, self.ANSI_DIM_GRAY))
+            print(self._colorize("# Plan Explanation\n" + explanation, self.ANSI_MEDIUM_GRAY))
 
     # ------------------------------------------------------------------
     # Prompts
@@ -149,26 +151,43 @@ class CLIRenderer:
     # Loader utilities
     # ------------------------------------------------------------------
     def start_loader(self) -> tuple[Optional[threading.Event], Optional[threading.Thread]]:
+        if self._loader_thread and self._loader_thread.is_alive():
+            return self._loader_stop, self._loader_thread
+
         if not sys.stdout.isatty():
+            self._loader_stop = None
+            self._loader_thread = None
             return None, None
 
         stop_event = threading.Event()
-        color_reset = self.ANSI_RESET if self.color_prefix else ""
+        frames = [
+            "on it   ◐◐◐",
+            "on it   ◓◓◓",
+            "on it   ◑◑◑",
+            "on it   ◒◒◒",
+            "on it   ◐◓◑",
+            "on it   ◓◑◒",
+        ]
 
         def loader() -> None:
-            i = 0
+            idx = 0
+            if self._supports_color:
+                print("\033[?25l", end="", flush=True)
             while not stop_event.is_set():
-                dots = "." * (i % 4)
-                print(
-                    f"\r{self.color_prefix}{dots:<4}{color_reset}",
-                    end="",
-                    flush=True,
-                )
-                i += 1
-                time.sleep(0.1)
+                frame = frames[idx % len(frames)]
+                idx += 1
+                if self._supports_color:
+                    frame = f"{self.ANSI_MEDIUM_GRAY}{frame}{self.ANSI_RESET}"
+                print(f"\r{frame:<18}", end="", flush=True)
+                time.sleep(0.06)
+            print("\r" + " " * 18 + "\r", end="", flush=True)
+            if self._supports_color:
+                print("\033[?25h", end="", flush=True)
 
-        thread = threading.Thread(target=loader)
+        thread = threading.Thread(target=loader, daemon=True)
         thread.start()
+        self._loader_stop = stop_event
+        self._loader_thread = thread
         return stop_event, thread
 
     # ------------------------------------------------------------------
@@ -253,3 +272,13 @@ class CLIRenderer:
         if not text or not self._supports_color:
             return text
         return f"{color}{text}{self.ANSI_RESET}"
+
+    def stop_loader(self) -> None:
+        if self._loader_stop:
+            self._loader_stop.set()
+        if self._loader_thread and self._loader_thread.is_alive():
+            self._loader_thread.join()
+        self._loader_stop = None
+        self._loader_thread = None
+        if self._supports_color:
+            print("\033[?25h", end="", flush=True)
