@@ -13,42 +13,46 @@ from typing import Iterable, Optional
 class CLIRenderer:
     """Console renderer for the ai CLI."""
 
-    COLOR_ADD = "\033[97m"
-    COLOR_REMOVE = "\033[37m"
-    COLOR_CONTEXT = "\033[90m"
-    COLOR_RESET = "\033[0m"
+    ANSI_WHITE = "\033[97m"
+    ANSI_LIGHT_GRAY = "\033[37m"
+    ANSI_DIM_GRAY = "\033[90m"
+    ANSI_RESET = "\033[0m"
 
     def __init__(self, *, color_prefix: str = "\033[1;36m") -> None:
         self.color_prefix = color_prefix
+        self._supports_color = sys.stdout.isatty()
 
     # ------------------------------------------------------------------
     # Output helpers
     # ------------------------------------------------------------------
     def display_info(self, text: str) -> None:
         if text:
-            print(text)
+            print(self._colorize(text, self.ANSI_DIM_GRAY))
 
     def display_error(self, text: str) -> None:
         if text:
-            print(text, file=sys.stderr)
+            if sys.stderr.isatty():
+                print(self._colorize(text, self.ANSI_LIGHT_GRAY), file=sys.stderr)
+            else:
+                print(text, file=sys.stderr)
 
     def display_reasoning(self, text: str) -> None:
         if text:
-            print(f"# Reasoning\n{text}\n")
+            print(self._colorize(f"# Reasoning\n{text}\n", self.ANSI_DIM_GRAY))
 
     def display_assistant_message(self, text: str) -> None:
         if text:
-            print(text)
+            print(self._colorize(text, self.ANSI_LIGHT_GRAY))
 
     def display_shell_output(self, text: str) -> None:
         if text:
-            print(text)
+            print(self._colorize(text, self.ANSI_LIGHT_GRAY))
 
     def display_plan_update(self, plan: str, explanation: Optional[str]) -> None:
         if plan:
-            print("# Updated Plan\n" + plan)
+            print(self._colorize("# Updated Plan\n" + plan, self.ANSI_LIGHT_GRAY))
         if explanation:
-            print("# Plan Explanation\n" + explanation)
+            print(self._colorize("# Plan Explanation\n" + explanation, self.ANSI_LIGHT_GRAY))
 
     # ------------------------------------------------------------------
     # Prompts
@@ -111,13 +115,13 @@ class CLIRenderer:
         )
 
         if not diff_lines:
-            print(f"[skip] {display_path}: no changes detected")
+            print(self._format_status("skip", display_path, suffix=": no changes detected"))
             return "no_change"
 
         print(self._format_diff(diff_lines))
 
         if auto_apply:
-            print(f"[auto] applying changes to {display_path}")
+            print(self._format_status("auto", display_path, prefix="applying changes to "))
             confirmed = True
         else:
             confirmed = self.prompt_confirm(
@@ -125,7 +129,7 @@ class CLIRenderer:
             )
 
         if not confirmed:
-            print(f"[skip] {display_path}")
+            print(self._format_status("skip", display_path))
             return "user_rejected"
 
         try:
@@ -135,10 +139,10 @@ class CLIRenderer:
                 encoding="utf-8",
             )
             os.chmod(target_path, 0o644)
-            print(f"[applied] {display_path}")
+            print(self._format_status("applied", display_path))
             return "applied"
         except Exception as exc:  # pragma: no cover - filesystem errors
-            print(f"[error] failed to write {display_path}: {exc}")
+            print(self._format_status("error", display_path, suffix=f": failed to write ({exc})"))
             return f"error: failed to write {display_path}: {exc}"
 
     # ------------------------------------------------------------------
@@ -149,7 +153,7 @@ class CLIRenderer:
             return None, None
 
         stop_event = threading.Event()
-        color_reset = self.COLOR_RESET if self.color_prefix else ""
+        color_reset = self.ANSI_RESET if self.color_prefix else ""
 
         def loader() -> None:
             i = 0
@@ -172,6 +176,7 @@ class CLIRenderer:
     # ------------------------------------------------------------------
     def _format_diff(self, diff_lines: Iterable[str]) -> str:
         formatted: list[str] = []
+        line_with_numbers = ""
         old_no = new_no = None
         header_pattern = re.compile(
             r"^@@ -(?P<old>\d+)(?:,(?P<old_count>\d+))? \+(?P<new>\d+)(?:,(?P<new_count>\d+))? @@"
@@ -198,6 +203,7 @@ class CLIRenderer:
 
             prefix = line[:1]
             old_label = new_label = ""
+            line_with_numbers = line
 
             if prefix == "-":
                 if old_no is None:
@@ -221,14 +227,31 @@ class CLIRenderer:
 
             line_with_numbers = f"{old_label:>6} {new_label:>6} {line}"
 
-            if colorize:
+            if colorize and prefix:
                 if prefix == "+":
-                    line_with_numbers = f"{self.COLOR_ADD}{line_with_numbers}{self.COLOR_RESET}"
+                    line_with_numbers = f"{self.ANSI_WHITE}{line_with_numbers}{self.ANSI_RESET}"
                 elif prefix == "-":
-                    line_with_numbers = f"{self.COLOR_REMOVE}{line_with_numbers}{self.COLOR_RESET}"
+                    line_with_numbers = f"{self.ANSI_LIGHT_GRAY}{line_with_numbers}{self.ANSI_RESET}"
                 else:
-                    line_with_numbers = f"{self.COLOR_CONTEXT}{line_with_numbers}{self.COLOR_RESET}"
+                    line_with_numbers = f"{self.ANSI_DIM_GRAY}{line_with_numbers}{self.ANSI_RESET}"
 
             formatted.append(line_with_numbers)
 
         return "\n".join(formatted)
+
+    def _format_status(self, label: str, path: Path, *, prefix: str = "", suffix: str = "") -> str:
+        tag = f"[{label}]"
+        if self._supports_color:
+            if label.lower() == "applied":
+                tag = f"{self.ANSI_WHITE}{tag}{self.ANSI_RESET}"
+            elif label.lower() == "error":
+                tag = f"{self.ANSI_LIGHT_GRAY}{tag}{self.ANSI_RESET}"
+            else:
+                tag = f"{self.ANSI_DIM_GRAY}{tag}{self.ANSI_RESET}"
+        body = f"{prefix}{path}"
+        return f"{tag} {body}{suffix}" if suffix else f"{tag} {body}"
+
+    def _colorize(self, text: str, color: str) -> str:
+        if not text or not self._supports_color:
+            return text
+        return f"{color}{text}{self.ANSI_RESET}"
