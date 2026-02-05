@@ -34,7 +34,8 @@ hosted installer script. | [README.md](README.md), [main.py](main.py),
 [install.sh](install.sh) |
 
 ## 4. Architectural Components
-- **CLI entrypoint** – Parses arguments, handles upgrade/help flags, wires the CLI renderer, and delegates orchestration to the shared engine. ([main.py](main.py), [cli_renderer.py](cli_renderer.py))
+- **CLI entrypoint** – Minimal launcher that hands off to the orchestrator. ([main.py](main.py))
+- **Orchestrator** – Bridges configuration, renderer selection, argument parsing, and engine execution so alternate UIs can share the same flow. ([orchestrator.py](orchestrator.py))
 - **AI engine** – Core orchestration layer that gathers context, manages the Responses loop, dispatches tools, and applies mutations via the injected renderer. ([ai_engine.py](ai_engine.py))
 - **Context harvesting** – Collects representative file snippets, enforces byte/line caps, and formats content for prompt injection. ([contextualizer.py](contextualizer.py))
 - **Sandboxed execution layer** – Validates bash commands against disallowed patterns, enforces repo-relative execution, and truncates oversized output. ([bash_executor.py](bash_executor.py))
