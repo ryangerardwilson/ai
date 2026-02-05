@@ -13,6 +13,7 @@ import subprocess
 import tempfile
 import signal
 import threading
+import textwrap
 from pathlib import Path
 from typing import Any, Dict, Sequence
 
@@ -27,6 +28,7 @@ from config_loader import (
     DEFAULT_SYSTEM_PROMPT,
 )
 from config_paths import get_config_path
+from contextualizer import collect_context, format_context
 
 INSTALL_SH_URL = "https://raw.githubusercontent.com/ryangerardwilson/ai/main/install.sh"
 
@@ -36,6 +38,7 @@ COLOR_REMOVE = "\033[37m"  # light gray
 COLOR_CONTEXT = "\033[90m"  # dark gray
 COLOR_RESET = "\033[0m"
 DEFAULT_COLOR = "\033[1;36m"
+DEFAULT_MAX_READ_BYTES = 8000
 
 PRIMARY_FLAG_SET = {"-h", "--help", "-v", "--version", "-V", "-u", "--upgrade"}
 RESPONSES_ONLY_MODELS = {
@@ -394,13 +397,21 @@ def start_loader(color_prefix=""):
 
 def parse_args(argv):
     parser = argparse.ArgumentParser(
-        description="Snarky AI chat interface with optional edit mode"
+        description="Snarky AI chat interface with edit and bash modes"
     )
     parser.add_argument(
         "-e",
         "--edit",
         metavar="PATH",
         help="Rewrite the given file according to the instruction",
+    )
+    parser.add_argument(
+        "-b",
+        "--bash",
+        metavar="SCOPE",
+        nargs="?",
+        const="",
+        help="Enable bash mode and optionally restrict scope to SCOPE",
     )
     parser.add_argument("prompt", nargs="*", help="Prompt or edit instruction")
     return parser.parse_args(argv)
@@ -682,6 +693,109 @@ def handle_edit_mode(
     return 0
 
 
+def _resolve_scope(scope: str | None, repo_root: Path) -> tuple[Path, Path, str]:
+    if not scope:
+        return repo_root, repo_root, "repository root"
+
+    candidate = Path(scope).expanduser()
+    if not candidate.is_absolute():
+        candidate = (repo_root / candidate).resolve()
+    else:
+        candidate = candidate.resolve()
+
+    try:
+        candidate.relative_to(repo_root)
+    except ValueError as exc:
+        raise ValueError("Scope path must be inside the repository") from exc
+
+    if not candidate.exists():
+        raise FileNotFoundError(candidate)
+
+    if candidate.is_dir():
+        label = str(candidate.relative_to(repo_root)) or "."
+        return candidate, candidate, label
+
+    label = str(candidate.relative_to(repo_root))
+    return candidate.parent, candidate.parent, label
+
+
+def run_bash_mode(prompt: str, scope: str | None, config: Dict[str, Any]) -> int:
+    raw_prompt = (prompt or "").strip()
+    if not raw_prompt:
+        print("Provide a question for bash mode.")
+        return 1
+
+    repo_root = Path.cwd().resolve()
+    try:
+        _, scope_root, scope_label = _resolve_scope(scope, repo_root)
+    except FileNotFoundError as exc:
+        print(f"Scope path {exc} does not exist.", file=sys.stderr)
+        return 1
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    collected = collect_context(scope_root)
+    context_text = format_context(collected)
+
+    print("# Collected Context")
+    print(context_text)
+
+    model = resolve_model("bash", config)
+    api_key_value = resolve_api_key(config=config)
+    client = openai.OpenAI(api_key=api_key_value)
+
+    scope_sentence = (
+        "Focus on the entire repository." if scope_label == "repository root" else f"Scope: {scope_label}."
+    )
+
+    system_prompt = textwrap.dedent(
+        f"""
+        You are Codex CLI operating locally. You have already inspected the repository
+        using trusted tools, and you now have a snapshot of key files (directory tree,
+        README, main entry points). Use this evidence to answer the user's question.
+        {scope_sentence}
+        """
+    ).strip()
+
+    prompt_payload = textwrap.dedent(
+        f"""
+        ## Repository Snapshot
+        {context_text}
+
+        ## Task
+        {raw_prompt}
+
+        Provide a concise yet thorough response citing the relevant files you used.
+        """
+    ).strip()
+
+    try:
+        with client.responses.stream(
+            model=model,
+            instructions=system_prompt,
+            input=[
+                {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": prompt_payload}],
+                }
+            ],
+        ) as stream:
+            for event in stream:
+                if getattr(event, "type", "") == "response.output_text.delta":
+                    chunk = getattr(event, "delta", "")
+                    if chunk:
+                        print(chunk, end="", flush=True)
+            print()
+        return 0
+    except KeyboardInterrupt:
+        print("\nInterrupted by user.")
+        return 130
+    except Exception as exc:  # pragma: no cover - network issues
+        print(f"Error: {exc}")
+        return 1
+
+
 def main(argv=None):
     arg_list = list(sys.argv[1:] if argv is None else argv)
 
@@ -693,12 +807,28 @@ def main(argv=None):
 
     args = parse_args(arg_list)
 
+    if getattr(args, "bash", None) is not None and args.edit:
+        print("Cannot combine -b/--bash with -e/--edit.", file=sys.stderr)
+        return 1
+
     if args.edit:
         instruction = " ".join(args.prompt).strip()
         if not instruction:
             print("Give me an instruction after the file path, pal.")
             return 1
         return handle_edit_mode(args.edit, instruction, config=config)
+
+    if getattr(args, "bash", None) is not None:
+        scope_arg = args.bash or None
+        prompt_tokens = args.prompt
+        if prompt_tokens:
+            prompt_text = " ".join(prompt_tokens).strip()
+        else:
+            prompt_text = ""
+        if not prompt_text:
+            prompt_text = (scope_arg or "").strip()
+            scope_arg = None
+        return run_bash_mode(prompt_text, scope_arg, config)
 
     prompt = " ".join(args.prompt).strip()
     if prompt:

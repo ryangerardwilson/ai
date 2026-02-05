@@ -43,6 +43,12 @@ python main.py
 - `ai "how do I write a release workflow?"` — send a one-off prompt; the reply prints to stdout.
 - `ai -e path/to/file.py "replace legacy API usage"` — rewrite a file, inspect the diff, and apply if you confirm.
 - If you decline the proposed rewrite, `ai` simply asks for extra context so you can retry the edit immediately.
+- `ai -b "what is the objective of this repo"` — enter bash mode; the assistant can inspect files via safe shell commands and summarize findings.
+- `ai -b docs/architecture "summarize these docs"` — limit bash mode to the `docs/architecture` directory while answering.
+- In bash mode the model can request tools by printing directives in its response:
+  - `RUN: <command>` executes a read-only shell command (e.g., `RUN: ls`).
+  - `READ: path/to/file` streams file contents (with truncation safeguards).
+  - `GREP: pattern :: path/to/file` returns regex matches with line numbers.
 - `ai -v` — print the installed version.
 - `ai -u` — rerun the installer script if a newer release exists.
 - `ai -h` — show the CLI help summary.
@@ -61,15 +67,24 @@ Interactive mode keeps a temporary transcript under `/tmp`, streams assistant ou
   "models": {
     "chat": "gpt-5.2",
     "prompt": "gpt-5-mini",
-    "edit": "gpt-5-codex"
+    "edit": "gpt-5-codex",
+    "bash": "gpt-5-codex"
   },
-  "system_instruction": "Channel a blunt, no-nonsense, technically brutal critique style"
+  "system_instruction": "Channel a blunt, no-nonsense, technically brutal critique style",
+  "bash_settings": {
+    "max_seconds": 20,
+    "max_output_bytes": 32768,
+    "max_iterations": 6
+  }
 }
 ```
 
 - `OPENAI_API_KEY` overrides the `openai_api_key` entry at runtime (handy for CI or shells).
 - `AI_MODEL` overrides every mode's model; `AI_MODEL_CHAT`, `AI_MODEL_PROMPT`, and `AI_MODEL_EDIT` target individual modes.
 - `AI_COLOR` adjusts the ANSI color prefix for assistant output; `AI_SYSTEM_PROMPT` overrides the system instruction.
+- `AI_MODEL_BASH` selects the model used in bash mode (defaults to a Responses-capable Codex model).
+- `AI_BASH_MAX_SECONDS`, `AI_BASH_MAX_OUTPUT`, and `AI_BASH_MAX_ITERATIONS` tune command timeout, captured bytes, and maximum command/response loops.
+- `bash_settings` in the config file mirrors those environment variables if you prefer static defaults.
 - Models with the `-codex` suffix (for example `gpt-5-codex`) are Responses-only per [OpenAI's docs](https://platform.openai.com/docs/models/gpt-5-codex); `ai` automatically switches the edit workflow to the Responses API when you configure one.
 
 The application stores temporary chat buffers in `/tmp/chat_history_*.txt`. Killing the process with `Ctrl+C` cleans up any remaining scratch files.
