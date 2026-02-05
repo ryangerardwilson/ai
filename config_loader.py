@@ -34,6 +34,7 @@ DEFAULT_BASH_SETTINGS: Dict[str, Any] = {
 DEFAULT_CONTEXT_SETTINGS: Dict[str, Any] = {
     "read_limit": DEFAULT_READ_LIMIT,
     "max_bytes": MAX_READ_BYTES,
+    "include_listing": False,
 }
 
 DEFAULTS: Dict[str, Any] = {
@@ -105,6 +106,10 @@ def load_config() -> Dict[str, Any]:
     env_context_bytes = os.environ.get("AI_CONTEXT_MAX_BYTES")
     if env_context_bytes and env_context_bytes.isdigit():
         cfg["context_settings"]["max_bytes"] = int(env_context_bytes)
+
+    env_context_listing = os.environ.get("AI_CONTEXT_INCLUDE_LISTING")
+    if env_context_listing:
+        cfg["context_settings"]["include_listing"] = env_context_listing.lower() in {"1", "true", "yes"}
 
     return cfg
 

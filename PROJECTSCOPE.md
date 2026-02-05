@@ -1,59 +1,59 @@
 # PROJECT SCOPE: `ai`
 
-## Product Vision
-- Deliver a Codex-inspired, terminal-first companion that analyzes repositories, answers follow-up questions, and proposes file rewrites with transparent diffs and human approval loops. [`main.py`](main.py) [`README.md`](README.md)
-- Keep every interaction auditable by surfacing directory listings, context excerpts, tool calls, and write confirmations directly in the CLI session. [`main.py`](main.py)
+## Product Vision & Value Proposition
+- Ship a terminal-first, Codex-inspired teammate that inspects repositories, streams reasoning, and delivers auditable file rewrites from a single binary. [`main.py`](main.py) [`README.md`](README.md)
+- Emphasize transparency and operator control by surfacing context gathering, tool calls, and diff approvals directly in the CLI. [`main.py`](main.py)
+- Offer easy onboarding through a curl-installable bundle, stable version semantics, and upgrade ergonomics suitable for individual developers and platform teams. [`install.sh`](install.sh) [`_version.py`](_version.py)
 
-## Key Personas & Scenarios
-1. **Hands-on developers** looking for rapid repository reconnaissance and iterative Q&A without leaving the shell. [`README.md`](README.md)
-2. **Security-conscious operators** who demand sandboxed command execution, scoped file access, and explicit confirmation before edits land. [`bash_executor.py`](bash_executor.py) [`main.py`](main.py)
-3. **Release and platform engineers** responsible for packaging the standalone binary, distributing upgrades, and tracking semantic versions. [`install.sh`](install.sh) [`_version.py`](_version.py)
+## Primary Personas & Scenarios
+1. **Shell-native developers** seeking rapid repo reconnaissance, ad-hoc Q&A, and iterative refactors without leaving the terminal. [`README.md`](README.md)
+2. **Security-conscious operators** who demand sandboxed command execution, scoped file access, and explicit confirmation before writes are committed. [`main.py`](main.py) [`bash_executor.py`](bash_executor.py)
+3. **Release and DevOps engineers** responsible for packaging, distributing, and upgrading the binary across fleets while tracking semantic versions. [`install.sh`](install.sh) [`_version.py`](_version.py)
 
-## Core Pillars
-- **Repository-aware conversations** – Gather directory listings plus up to eight relevant files to seed prompts and keep discussions grounded in source truth. [`contextualizer.py`](contextualizer.py) [`main.py`](main.py)
-- **Guided file rewrites** – When scoped to a file, request full replacements from the edit model, display numbered diffs, and persist changes only after user approval. [`main.py`](main.py)
-- **Sandboxed automation** – Validate commands against disallowed substrings and path escapes before running them with strict timeout and output ceilings. [`bash_executor.py`](bash_executor.py) [`main.py`](main.py)
-- **Distribution & upgrades** – Provide a curl-able installer, manage PATH shims, expose `ai -v`/`ai -u`, and keep `_version.py` in sync during tagged releases. [`install.sh`](install.sh) [`main.py`](main.py) [`_version.py`](_version.py)
+## Core Capabilities
+- **Repository-aware conversations** – Automatically assemble directory listings and up to eight high-signal source files to ground prompts in the current checkout. [`contextualizer.py`](contextualizer.py) [`main.py`](main.py)
+- **Scoped editing workflow** – When focused on a file, request full replacements from the edit model, render numbered diffs, and require user confirmation before persisting changes. [`main.py`](main.py)
+- **Explicit tool orchestration** – Expose `read_file`, `write`, `shell`, and `update_plan` tooling to the model, printing every invocation for user review. [`main.py`](main.py)
+- **Sandboxed automation** – Enforce command allowlists, reject absolute or parent paths, cap runtime/output, and format transcripts for bash-mode tasks. [`bash_executor.py`](bash_executor.py)
+- **Interactive follow-ups** – Maintain conversation state, stream assistant output with colorized loaders, and collect additional instructions after each response. [`main.py`](main.py)
 
 ## Architecture Overview
-- **CLI Orchestrator (`main.py`)** – Parses arguments, resolves scopes, loads configuration, orchestrates OpenAI Responses sessions, streams model output, manages tool calls (`read_file`, `write`, `shell`, `update_plan`), renders diffs, and cleans up temporary chat history files. [`main.py`](main.py)
-- **Context Engine (`contextualizer.py`)** – Prioritizes interesting project files, enforces byte/line limits, detects binary assets, and formats prompt/display blocks for repository snapshots. [`contextualizer.py`](contextualizer.py)
-- **Sandboxed Bash Runtime (`bash_executor.py`)** – Defines disallowed command substrings, rejects absolute/parent path usage, executes approved commands under deterministic locale settings, truncates oversized output, and normalizes formatted transcripts. [`bash_executor.py`](bash_executor.py)
-- **Configuration Subsystem (`config_loader.py`, `config_paths.py`)** – Resolves XDG-compliant config paths, merges JSON defaults with environment overrides, and exposes model/system prompt/bash limit settings. [`config_loader.py`](config_loader.py) [`config_paths.py`](config_paths.py)
-- **Distribution Assets (`install.sh`, `_version.py`)** – Package and install the PyInstaller bundle, manage local upgrades, and surface the runtime version string for `ai -v`. [`install.sh`](install.sh) [`_version.py`](_version.py)
-- **Quality & Regression Tests (`tests/test_contextualizer.py`)** – Exercise context slicing behaviors to ensure offsets, truncation flags, and prompt formatting remain stable. [`tests/test_contextualizer.py`](tests/test_contextualizer.py)
+| Component | Responsibility | References |
+| --- | --- | --- |
+| CLI Orchestrator | Parses arguments, resolves scopes, orchestrates Responses sessions, manages tool calls, renders diffs, and cleans up temp chat buffers. | [`main.py`](main.py)
+| Context Engine | Detects binary assets, applies byte/line guards, prioritizes interesting files, and formats prompt/display payloads. | [`contextualizer.py`](contextualizer.py)
+| Configuration Subsystem | Resolves XDG paths, hydrates defaults, and applies env overrides for models, prompts, and bash/context limits. | [`config_loader.py`](config_loader.py) [`config_paths.py`](config_paths.py)
+| Sandboxed Bash Runtime | Validates commands, executes within repo scope, enforces limits, and normalizes results for display. | [`bash_executor.py`](bash_executor.py)
+| Distribution Assets | Install/upgrade scripts, PATH shims, and runtime version metadata for `ai -v` and release automation. | [`install.sh`](install.sh) [`_version.py`](_version.py)
 
 ## Operational Workflows
-1. **Repository conversation**
-   - Parse CLI args, resolve scope, and gather context files with byte/line safeguards. [`main.py`](main.py) [`contextualizer.py`](contextualizer.py)
-   - Start an OpenAI Responses session seeded with tool definitions; process reasoning, tool calls, and assistant messages. [`main.py`](main.py)
-   - Execute requested tools and echo their outputs, keeping the user in the approval loop. [`main.py`](main.py)
-2. **File edit session**
-   - Load the targeted file (or empty content), call the edit model for a full rewrite, strip code fences, and render numbered diffs. [`main.py`](main.py)
-   - Confirm before writing, normalize newline termination, and set standard permissions. [`main.py`](main.py)
-3. **Sandboxed bash command**
-   - Reject dangerous commands up front, then run approved ones with configured timeout/output ceilings and formatted transcripts. [`bash_executor.py`](bash_executor.py) [`main.py`](main.py)
-4. **Install & upgrade flow**
-   - Fetch the hosted installer (or supplied bundle), hydrate the app under `~/.ai`, manage PATH shims, and update versions during tagged releases. [`install.sh`](install.sh) [`README.md`](README.md) [`_version.py`](_version.py)
+1. **Repository conversation** – Parse CLI arguments, gather scoped context, launch an OpenAI Responses session with tool definitions, execute any requested tools, then prompt for follow-up instructions. [`main.py`](main.py) [`contextualizer.py`](contextualizer.py)
+2. **File edit session** – Load target snapshot, call the edit model for full-content rewrites, strip code fences, show diffs, and write on approval (auto-applying when the instruction explicitly demands a write). [`main.py`](main.py)
+3. **Sandboxed bash command** – Reject unsafe commands up front, run approved ones under deterministic locales/timeouts, truncate oversized output, and echo transcripts. [`bash_executor.py`](bash_executor.py)
+4. **Installation & upgrades** – Fetch tagged or latest releases, unpack into `~/.ai`, manage PATH shims, and skip reinstalls when versions already match. [`install.sh`](install.sh) [`README.md`](README.md)
 
 ## Configuration & Extensibility
-- Defaults cover model selection, system prompts, and bash/context limits; users can override via `~/.config/ai/config.json` or environment variables such as `OPENAI_API_KEY`, `AI_MODEL*`, and `AI_BASH_MAX_*`. [`config_loader.py`](config_loader.py) [`README.md`](README.md)
-- ANSI color and system instruction tweaks adapt terminal presentation without source changes (`AI_COLOR`, `AI_SYSTEM_PROMPT`). [`config_loader.py`](config_loader.py) [`main.py`](main.py)
-- Context window controls (`read_limit`, `max_bytes`) can be tuned per repo or CI environment, ensuring predictable prompt budgets. [`config_loader.py`](config_loader.py) [`contextualizer.py`](contextualizer.py)
+- Defaults cover model selection, system prompts, and bash/context limits while still honoring environment overrides such as `OPENAI_API_KEY`, `AI_MODEL*`, `AI_BASH_MAX_*`, and `AI_CONTEXT_*`. [`config_loader.py`](config_loader.py) [`README.md`](README.md)
+- Config files live at the XDG-compliant path `~/.config/ai/config.json`, created on demand when ensuring directories exist. [`config_loader.py`](config_loader.py) [`config_paths.py`](config_paths.py)
+- ANSI color and custom system instructions enable per-user personalization without editing source. [`config_loader.py`](config_loader.py) [`main.py`](main.py)
 
 ## Security & Guardrails
-- Reject writes outside the repository root, require explicit confirmation (unless auto-applied by directive), and clean up temporary history files on exit. [`main.py`](main.py)
-- Enforce sandboxed command rules, blocking disallowed substrings, path escapes, and invalid working directories before execution. [`bash_executor.py`](bash_executor.py)
-- Surface line-numbered diffs and explicit tool-call transcripts so operators can audit every mutation. [`main.py`](main.py)
+- Reject file mutations outside the repository root, normalize newline termination, and require approval before writes unless the instruction implies automation. [`main.py`](main.py)
+- Log every tool invocation, including command transcripts, so operators can audit the session end-to-end. [`main.py`](main.py)
+- Deny dangerous shell commands (e.g., `rm`, `sudo`, absolute paths), enforce timeouts, and cap captured output to prevent runaway processes. [`bash_executor.py`](bash_executor.py)
+- Clean up temporary Vim/chat history files and trap interrupts for graceful exits. [`main.py`](main.py)
 
-## Dependencies & Tooling
-- Relies on the official `openai>=1.0.0` SDK for Responses and Chat Completions. [`requirements.txt`](requirements.txt) [`main.py`](main.py)
-- Assumes local availability of `curl`, `bash`, and `tar` for installation and upgrade automation. [`install.sh`](install.sh) [`README.md`](README.md)
+## Distribution & Release Management
+- PyInstaller bundles ship as `ai-linux-x64.tar.gz`; the installer fetches tagged assets or reuses local binaries and installs shims under `~/.ai/bin`. [`install.sh`](install.sh)
+- `_version.py` provides the runtime version string, overwritten during tagged GitHub Actions builds, ensuring `ai -v` reflects released artifacts. [`_version.py`](_version.py) [`README.md`](README.md)
+- Dependencies are minimal, relying primarily on `openai>=1.0.0` for Responses/chat APIs. [`requirements.txt`](requirements.txt)
 
-## Testing & Quality
-- Pytest coverage currently focuses on context window behavior; expanding tests across diff rendering, CLI parsing, and sandbox enforcement would boost confidence. [`tests/test_contextualizer.py`](tests/test_contextualizer.py) [`main.py`](main.py)
+## Quality & Testing
+- Pytest coverage currently targets context-window behavior, validating offsets, truncation flags, and prompt formatting. [`tests/test_contextualizer.py`](tests/test_contextualizer.py)
+- The repository includes a standalone plotting helper unrelated to CLI behavior, highlighting the need to separate experimental scripts from production code. [`test_funcs.py`](test_funcs.py)
 
 ## Known Gaps & Future Opportunities
-- Broaden automated testing around tool-call orchestration, diff approval pathways, and bash command rejection to reduce regressions. [`main.py`](main.py) [`bash_executor.py`](bash_executor.py)
-- Refine context heuristics to prioritize CI definitions, lockfiles, or repo-specific hot spots. [`contextualizer.py`](contextualizer.py)
-- Clarify or relocate plotting utilities currently living in `test_funcs.py` to avoid confusion with production code. [`test_funcs.py`](test_funcs.py)
+- Expand automated testing across CLI argument parsing, diff rendering, shell rejection paths, and tool-call orchestration for higher confidence. [`main.py`](main.py) [`bash_executor.py`](bash_executor.py)
+- Broaden context heuristics to account for repo-specific hotspots (CI configs, lockfiles, docs) and allow manual pinning of critical files. [`contextualizer.py`](contextualizer.py)
+- Harden release automation by validating installer checksums and extending support beyond Linux x86_64. [`install.sh`](install.sh)
+- Rehome or document auxiliary plotting scripts to avoid confusion with supported workflows. [`test_funcs.py`](test_funcs.py)

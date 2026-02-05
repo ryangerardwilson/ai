@@ -83,7 +83,7 @@ Each response streams live to your terminal, followed by the `follow_up >>>` pro
 - `AI_MODEL_BASH` selects the model used in bash mode (defaults to a Responses-capable Codex model).
 - `AI_BASH_MAX_SECONDS`, `AI_BASH_MAX_OUTPUT`, and `AI_BASH_MAX_ITERATIONS` tune command timeout, captured bytes, and maximum command/response loops.
 - `bash_settings` in the config file mirrors those environment variables if you prefer static defaults.
-- `context_settings` (in config or via env vars) tune the initial context window: `{"read_limit": 2000, "max_bytes": 51200}` by default. Override with `AI_CONTEXT_READ_LIMIT` and `AI_CONTEXT_MAX_BYTES`, or edit the config directly.
+- `context_settings` (in config or via env vars) tune the initial context window: `{"read_limit": 2000, "max_bytes": 51200, "include_listing": false}` by default. Override with `AI_CONTEXT_READ_LIMIT`, `AI_CONTEXT_MAX_BYTES`, `AI_CONTEXT_INCLUDE_LISTING`, or edit the config directly.
 - Models with the `-codex` suffix (for example `gpt-5-codex`) are Responses-only per [OpenAI's docs](https://platform.openai.com/docs/models/gpt-5-codex); `ai` automatically switches the edit workflow to the Responses API when you configure one.
 
 The application stores temporary chat buffers in `/tmp/chat_history_*.txt`. Killing the process with `Ctrl+C` cleans up any remaining scratch files.

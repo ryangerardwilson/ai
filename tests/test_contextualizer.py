@@ -4,8 +4,10 @@ import tempfile
 from contextualizer import (
     read_file_slice,
     format_file_slice_for_prompt,
+    collect_context,
     DEFAULT_READ_LIMIT,
     MAX_READ_BYTES,
+    CollectedContext,
 )
 
 
@@ -40,3 +42,11 @@ def test_read_file_slice_uses_offset():
         assert slice_info.truncated is True
     finally:
         path.unlink(missing_ok=True)
+
+
+def test_collect_context_skips_listing_by_default(tmp_path: Path):
+    file_path = tmp_path / "sample.txt"
+    file_path.write_text("hello\nworld\n")
+    context = collect_context(tmp_path)
+    assert isinstance(context, CollectedContext)
+    assert context.listing == []

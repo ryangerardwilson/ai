@@ -200,16 +200,18 @@ def collect_context(
     *,
     limit_bytes: int = MAX_READ_BYTES,
     default_limit: int = DEFAULT_READ_LIMIT,
+    include_listing: bool = False,
     file_windows: dict[Path, tuple[int, int]] | None = None,
 ) -> CollectedContext:
     scope_root = scope.resolve()
     listing: List[str] = []
-    try:
-        for entry in sorted(scope_root.iterdir()):
-            mark = "/" if entry.is_dir() else ""
-            listing.append(entry.name + mark)
-    except FileNotFoundError:
-        listing.append("<scope directory missing>")
+    if include_listing:
+        try:
+            for entry in sorted(scope_root.iterdir()):
+                mark = "/" if entry.is_dir() else ""
+                listing.append(entry.name + mark)
+        except FileNotFoundError:
+            listing.append("<scope directory missing>")
 
     files: List[FileSlice] = []
     for candidate in _discover_candidates(scope_root):
@@ -271,12 +273,14 @@ def format_file_slice_for_prompt(file_slice: FileSlice, *, rel_root: Path | None
 def format_context_for_prompt(collected: CollectedContext) -> str:
     blocks: List[str] = []
     rel_root = collected.scope_root
-    blocks.append("## Directory Listing")
-    for line in collected.listing:
-        blocks.append(f"- {line}")
+    if collected.listing:
+        blocks.append("## Directory Listing")
+        for line in collected.listing:
+            blocks.append(f"- {line}")
 
     for file_slice in collected.files:
-        blocks.append("")
+        if blocks:
+            blocks.append("")
         blocks.append(format_file_slice_for_prompt(file_slice, rel_root=rel_root))
 
     return "\n".join(blocks)
@@ -285,13 +289,15 @@ def format_context_for_prompt(collected: CollectedContext) -> str:
 def format_context_for_display(collected: CollectedContext) -> str:
     blocks: List[str] = []
     rel_root = collected.scope_root
-    blocks.append("## Directory Listing")
-    for line in collected.listing:
-        blocks.append(f"- {line}")
+    if collected.listing:
+        blocks.append("## Directory Listing")
+        for line in collected.listing:
+            blocks.append(f"- {line}")
 
     for file_slice in collected.files:
         rel_path = file_slice.path.relative_to(rel_root)
-        blocks.append("")
+        if blocks:
+            blocks.append("")
         label = "file" if file_slice.path.is_file() else "entry"
         descriptor = (
             f"offset={file_slice.offset} limit={file_slice.limit} "

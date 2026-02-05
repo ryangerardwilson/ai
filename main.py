@@ -1264,6 +1264,7 @@ def run_codex_conversation(prompt: str, scope: str | None, config: Dict[str, Any
     context_settings = config.get("context_settings", {})
     context_max_bytes = int(context_settings.get("max_bytes", MAX_READ_BYTES))
     context_default_limit = int(context_settings.get("read_limit", DEFAULT_READ_LIMIT))
+    include_listing = bool(context_settings.get("include_listing", False))
     try:
         _, scope_root, scope_label = _resolve_scope(scope, repo_root)
     except FileNotFoundError as exc:
@@ -1277,6 +1278,7 @@ def run_codex_conversation(prompt: str, scope: str | None, config: Dict[str, Any
         scope_root,
         limit_bytes=context_max_bytes,
         default_limit=context_default_limit,
+        include_listing=include_listing,
     )
     display_text = format_context_for_display(collected)
     prompt_context = format_context_for_prompt(collected)
@@ -1337,6 +1339,7 @@ def run_codex_conversation(prompt: str, scope: str | None, config: Dict[str, Any
                 scope_root,
                 limit_bytes=context_max_bytes,
                 default_limit=context_default_limit,
+                include_listing=include_listing,
             )
             prompt_context = format_context_for_prompt(collected)
             pending_context_update = prompt_context
