@@ -649,6 +649,11 @@ class AIEngine:
                 continue
 
             manual_mutation = False
+            if assistant_messages:
+                last_message_id = assistant_messages[-1][1]
+            else:
+                last_message_id = None
+
             for message_text, message_id, render_key in assistant_messages:
                 if (
                     render_key not in rendered_messages
@@ -659,6 +664,9 @@ class AIEngine:
                     rendered_messages.add(render_key)
                     displayed_current_cycle = True
                 previous_message = message_text
+                is_final_summary = message_id == last_message_id
+                if is_final_summary:
+                    continue
                 for filename, content in self._detect_generated_files(message_text):
                     status = self._apply_file_update(
                         filename,
@@ -730,7 +738,8 @@ class AIEngine:
                     self._api_debug(
                         f"shell result len={len(formatted)} truncated={formatted[:120]!r}"
                     )
-                    self.renderer.display_info(f"$ {command_text}")
+                    if formatted.strip():
+                        self.renderer.display_shell_output(formatted)
                     preview_message = (
                         "Executed shell command: `"
                         + command_text
@@ -1118,8 +1127,13 @@ class AIEngine:
                 max_output_bytes=max_output_bytes,
             )
             formatted = format_command_result(result)
-            self.renderer.display_info(f"$ {command_str}")
-            return formatted, False
+            if formatted.strip():
+                rendered = f"$ {command_str}\n\n{formatted}"
+            else:
+                rendered = "(no output)"
+            if formatted.strip():
+                self.renderer.display_shell_output(rendered)
+            return rendered, False
         except CommandRejected as exc:
             message = f"command rejected: {exc}"
             self.renderer.display_error(message)

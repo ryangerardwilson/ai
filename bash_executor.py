@@ -148,14 +148,14 @@ def run_sandboxed_bash(
 
 
 def format_command_result(result: CommandResult) -> str:
-    body = [f"$ {result.command}", f"exit_code: {result.exit_code}"]
+    sections = []
     if result.stdout:
-        body.append("stdout:\n" + result.stdout.rstrip())
+        sections.append("stdout:\n" + result.stdout.rstrip())
     if result.stderr:
-        body.append("stderr:\n" + result.stderr.rstrip())
+        sections.append("stderr:\n" + result.stderr.rstrip())
     if result.truncated:
-        body.append("[output truncated]")
-    return textwrap.dedent("\n\n".join(body)).strip()
+        sections.append("[output truncated]")
+    return textwrap.dedent("\n\n".join(sections)).strip()
 
 
 __all__ = [
