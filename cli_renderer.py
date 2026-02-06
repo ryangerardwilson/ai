@@ -193,6 +193,14 @@ class CLIRenderer:
                     return edited
 
             if trimmed:
+                if trimmed.lower() == "help":
+                    self.display_info(
+                        "# Help\n"
+                        "- Enter a question or instruction to continue the conversation.\n"
+                        "- Prefix a shell command with `!` (e.g., `!ls`).\n"
+                        "- Use `/v` or `v` to draft the next prompt in Vim."
+                    )
+                    continue
                 self._suppress_next_user_prompt = True
                 return trimmed
 
@@ -459,7 +467,7 @@ class CLIRenderer:
             self._render_reasoning_line(reasoning_id)
         else:
             if not self._reasoning_placeholder_printed and not is_summary:
-                print("🤔 thinking…")
+                print("🤖 thinking…")
                 self._reasoning_placeholder_printed = True
 
     def update_reasoning(self, reasoning_id: str, delta: str) -> None:
@@ -500,7 +508,7 @@ class CLIRenderer:
             if not already_printed:
                 last = self._reasoning_last_snippet.get(reasoning_id)
                 if last != snippet_full:
-                    line = f"🤔 {snippet_full}" if snippet_full else "🤔"
+                    line = f"🤖 {snippet_full}" if snippet_full else "🤖"
                     padding = max(0, self._reasoning_line_len - len(line))
                     print(
                         f"\r{self.ANSI_REASONING}{line}{self.ANSI_RESET}{' ' * padding}"
@@ -513,7 +521,7 @@ class CLIRenderer:
                 self._log_reasoning(
                     f"finish non-tty print id={reasoning_id} normalized_len={len(normalized)}"
                 )
-                print(f"🤔 {snippet_full}")
+                print(f"🤖 {snippet_full}")
                 self._printed_reasoning_snippets.add(normalized)
         self._printed_reasoning_ids.add(reasoning_id)
         self._reasoning_placeholder_printed = False
@@ -537,7 +545,7 @@ class CLIRenderer:
         self._log_reasoning(
             f"render id={reasoning_id} snippet_len={len(snippet)} supports_color={self._supports_color}"
         )
-        line = f"🤔 {snippet}"
+        line = f"🤖 {snippet}"
         if self._supports_color and sys.stdout.isatty():
             padding = max(0, self._reasoning_line_len - len(line))
             print(

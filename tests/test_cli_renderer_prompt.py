@@ -113,7 +113,7 @@ def test_reasoning_updates_output(capsys):
     renderer.finish_reasoning("step-1", "analyzing repository")
 
     out = capsys.readouterr().out
-    assert "🤔" in out
+    assert "🤖" in out
     assert "analyzing repository" in out
 
 

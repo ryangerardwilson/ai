@@ -137,7 +137,6 @@ class Orchestrator:
                     if not prompt_text:
                         self.renderer.display_info("Provide a question or instruction.")
                         return 1
-                    self.renderer.display_user_prompt(prompt_text)
                     return self.engine.run_conversation(
                         prompt_text, scope_arg, display_prompt=False
                     )
@@ -149,7 +148,6 @@ class Orchestrator:
             self._print_help()
             return 1
 
-        self.renderer.display_user_prompt(prompt_text)
         return self.engine.run_conversation(
             prompt_text, scope_arg, display_prompt=False
         )
