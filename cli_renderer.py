@@ -54,6 +54,7 @@ class CLIRenderer:
         )
         self._debug_reasoning = bool(debug_env)
         self._debug_stream: TextIO = sys.stderr
+        self._suppress_next_user_prompt = False
 
     def _log_reasoning(self, message: str) -> None:
         if self._debug_reasoning:
@@ -192,6 +193,7 @@ class CLIRenderer:
                     return edited
 
             if trimmed:
+                self._suppress_next_user_prompt = True
                 return trimmed
 
             # Empty input mirrors previous behaviour: exit conversation
@@ -429,6 +431,9 @@ class CLIRenderer:
 
     def display_user_prompt(self, prompt: str) -> None:
         if not prompt:
+            return
+        if self._suppress_next_user_prompt:
+            self._suppress_next_user_prompt = False
             return
         sanitized = prompt.replace("\r\n", "\n").replace("\r", "\n")
         sanitized = sanitized.replace("\n", " ⏎ ")

@@ -267,13 +267,16 @@ class AIEngine:
         self._debug_stream = stream
 
     # Conversation -----------------------------------------------------
-    def run_conversation(self, prompt: str, scope: Optional[str]) -> int:
+    def run_conversation(
+        self, prompt: str, scope: Optional[str], *, display_prompt: bool = True
+    ) -> int:
         raw_prompt = (prompt or "").strip()
         if not raw_prompt:
             self.renderer.display_info("Provide a question or instruction.")
             return 1
 
-        self.renderer.display_user_prompt(raw_prompt)
+        if display_prompt:
+            self.renderer.display_user_prompt(raw_prompt)
 
         repo_root = Path.cwd().resolve()
         context_settings = self.config.get("context_settings", {})
@@ -712,8 +715,7 @@ class AIEngine:
                     self._api_debug(
                         f"shell result len={len(formatted)} truncated={formatted[:120]!r}"
                     )
-                    if formatted.strip():
-                        self.renderer.display_shell_output(formatted)
+                    self.renderer.display_info(f"$ {command_text}")
                     preview_message = (
                         "Executed shell command: `"
                         + command_text
@@ -1101,7 +1103,7 @@ class AIEngine:
                 max_output_bytes=max_output_bytes,
             )
             formatted = format_command_result(result)
-            self.renderer.display_shell_output(formatted)
+            self.renderer.display_info(f"$ {command_str}")
             return formatted, False
         except CommandRejected as exc:
             message = f"command rejected: {exc}"

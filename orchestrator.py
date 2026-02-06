@@ -62,7 +62,10 @@ class Orchestrator:
             if not prompt_text:
                 self.renderer.display_info("Prompt cancelled (empty message).")
                 return 0
-            return self.engine.run_conversation(prompt_text, None)
+            self.renderer.display_user_prompt(prompt_text)
+            return self.engine.run_conversation(
+                prompt_text, None, display_prompt=False
+            )
 
         args = self._parse_args(arg_list)
         context_defaults = self.config.get("context_settings", {})
@@ -134,7 +137,10 @@ class Orchestrator:
                     if not prompt_text:
                         self.renderer.display_info("Provide a question or instruction.")
                         return 1
-                    return self.engine.run_conversation(prompt_text, scope_arg)
+                    self.renderer.display_user_prompt(prompt_text)
+                    return self.engine.run_conversation(
+                        prompt_text, scope_arg, display_prompt=False
+                    )
             else:
                 prompt_components.insert(0, scope_candidate)
 
@@ -143,7 +149,10 @@ class Orchestrator:
             self._print_help()
             return 1
 
-        return self.engine.run_conversation(prompt_text, scope_arg)
+        self.renderer.display_user_prompt(prompt_text)
+        return self.engine.run_conversation(
+            prompt_text, scope_arg, display_prompt=False
+        )
 
     # ------------------------------------------------------------------
     # Flag handling
