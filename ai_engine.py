@@ -141,6 +141,8 @@ class RendererProtocol(Protocol):
 
     def display_assistant_message(self, text: str) -> None: ...
 
+    def display_user_prompt(self, prompt: str) -> None: ...
+
     def display_reasoning(self, text: str) -> None: ...
 
     def display_shell_output(self, text: str) -> None: ...
@@ -166,6 +168,8 @@ class RendererProtocol(Protocol):
     def start_loader(self) -> tuple[Optional[object], Optional[object]]: ...
 
     def stop_loader(self) -> None: ...
+
+    def consume_completion_messages(self) -> list[str]: ...
 
 
 def resolve_api_key(
@@ -218,6 +222,8 @@ class AIEngine:
         if not raw_prompt:
             self.renderer.display_info("Provide a question or instruction.")
             return 1
+
+        self.renderer.display_user_prompt(raw_prompt)
 
         repo_root = Path.cwd().resolve()
         context_settings = self.config.get("context_settings", {})
@@ -455,6 +461,8 @@ class AIEngine:
             follow_up = follow_up.strip()
             if not follow_up:
                 return 0
+
+            self.renderer.display_user_prompt(follow_up)
 
             warned_no_write = False
 

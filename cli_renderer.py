@@ -393,6 +393,15 @@ class CLIRenderer:
     def edit_prompt(self, seed_text: str = "") -> Optional[str]:
         return self._edit_prompt_via_editor(seed_text)
 
+    def display_user_prompt(self, prompt: str) -> None:
+        if not prompt:
+            return
+        sanitized = prompt.replace("\r\n", "\n").replace("\r", "\n")
+        sanitized = sanitized.replace("\n", " ⏎ ")
+        limit = 500
+        truncated = sanitized if len(sanitized) <= limit else sanitized[:limit] + "…"
+        self.display_info(f"You > {truncated}")
+
     def _edit_prompt_via_editor(self, seed_text: str) -> Optional[str]:
         candidates = [
             os.environ.get("AI_PROMPT_EDITOR"),

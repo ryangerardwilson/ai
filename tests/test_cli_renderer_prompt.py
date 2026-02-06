@@ -82,3 +82,23 @@ def test_prompt_follow_up_vim_failure(monkeypatch):
     monkeypatch.setattr(renderer, "_edit_prompt_via_editor", fake_editor)
 
     assert renderer.prompt_follow_up() == "done"
+
+
+def test_display_user_prompt_truncates(capsys):
+    renderer = CLIRenderer()
+    renderer._supports_color = False  # type: ignore[attr-defined]
+
+    renderer.display_user_prompt("x" * 510)
+
+    out = capsys.readouterr().out.strip()
+    assert out.endswith("x" * 500 + "…")
+    assert out.startswith("You > ")
+
+
+def test_display_user_prompt_collapses_newlines(capsys):
+    renderer = CLIRenderer()
+    renderer._supports_color = False  # type: ignore[attr-defined]
+
+    renderer.display_user_prompt("line1\nline2")
+    out = capsys.readouterr().out.strip()
+    assert " ⏎ " in out
