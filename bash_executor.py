@@ -13,6 +13,9 @@ from typing import Iterable
 
 
 DISALLOWED_SUBSTRINGS: tuple[str, ...] = (
+    "git add",
+    "git commit",
+    "git push",
     "sudo",
     "chmod",
     "chown",
