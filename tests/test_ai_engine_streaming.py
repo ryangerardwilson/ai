@@ -1,6 +1,114 @@
+from collections import deque
 from types import SimpleNamespace
 from pathlib import Path
 import sys
+
+
+def test_run_conversation_ctrl_q_cancels(monkeypatch):
+    final_response = SimpleNamespace(output=[])
+
+    base_events = [
+        SimpleNamespace(
+            type="response.output_text.delta",
+            delta="Partial",
+            item_id="msg_1",
+            content_index=0,
+            output_index=0,
+        ),
+    ]
+
+    cancel_emitted = False
+
+    class EventIterable:
+        def __iter__(self_nonlocal):
+            nonlocal cancel_emitted
+            for event in base_events:
+                if not cancel_emitted:
+                    renderer.emit_hotkey("quit")
+                    cancel_emitted = True
+                yield event
+
+    renderer = DummyRenderer()
+
+    dummy_client = DummyClient(lambda: DummyStream(EventIterable(), final_response))
+    monkeypatch.setattr(ai_engine.openai, "OpenAI", lambda **kwargs: dummy_client)
+
+    engine = ai_engine.AIEngine(renderer=renderer, config={"openai_api_key": "sk-1"})
+
+    rc = engine.run_conversation("What?", None)
+
+    assert rc == 0
+    assert any("Prompt cancelled" in msg for msg in renderer.infos)
+    assert renderer.assistant_messages == []
+
+
+def test_run_conversation_ctrl_r_retries(monkeypatch):
+    final_response = SimpleNamespace(
+        output=[
+            SimpleNamespace(
+                type="message",
+                id="msg_1",
+                content=[SimpleNamespace(type="output_text", text="Retried result")],
+            )
+        ]
+    )
+
+    first_events = [
+        SimpleNamespace(
+            type="response.output_text.delta",
+            delta="Partial",
+            item_id="msg_1",
+            content_index=0,
+            output_index=0,
+        ),
+    ]
+    second_events = [
+        SimpleNamespace(
+            type="response.output_text.delta",
+            delta="Retried result",
+            item_id="msg_1",
+            content_index=0,
+            output_index=0,
+        ),
+        SimpleNamespace(
+            type="response.output_text.done",
+            text="Retried result",
+            item_id="msg_1",
+            content_index=0,
+            output_index=0,
+        ),
+        SimpleNamespace(type="response.completed", response=final_response),
+    ]
+
+    renderer = DummyRenderer()
+
+    stream_calls = {"count": 0}
+
+    def stream_factory():
+        stream_calls["count"] += 1
+        if stream_calls["count"] == 1:
+
+            class FirstIterable:
+                def __iter__(self_nonlocal):
+                    renderer.emit_hotkey("retry")
+                    for event in first_events:
+                        yield event
+
+            return DummyStream(FirstIterable(), SimpleNamespace(output=[]))
+        return DummyStream(second_events, final_response)
+
+    dummy_client = DummyClient(stream_factory)
+    monkeypatch.setattr(ai_engine.openai, "OpenAI", lambda **kwargs: dummy_client)
+
+    engine = ai_engine.AIEngine(renderer=renderer, config={"openai_api_key": "sk-1"})
+
+    rc = engine.run_conversation("Retry?", None)
+
+    assert rc == 0
+    assert stream_calls["count"] == 2
+    assert renderer.assistant_stream_final == "Retried result"
+    assert any("Retrying prompt" in msg for msg in renderer.infos)
+
 
 import pytest
 
@@ -21,6 +129,7 @@ class DummyRenderer:
         self.assistant_stream_started = False
         self.assistant_stream_chunks: list[str] = []
         self.assistant_stream_final: str | None = None
+        self.hotkey_events = deque()
 
     def display_info(self, text: str) -> None:
         self.infos.append(text)
@@ -83,6 +192,24 @@ class DummyRenderer:
         self, stream_id: str, final_text: str | None = None
     ) -> None:
         self.assistant_stream_final = final_text
+
+    def start_hotkey_listener(self) -> None:
+        pass
+
+    def stop_hotkey_listener(self) -> None:
+        pass
+
+    def poll_hotkey_event(self):
+        try:
+            return self.hotkey_events.popleft()
+        except IndexError:
+            return None
+
+    def emit_hotkey(self, name: str) -> None:
+        self.hotkey_events.append(name)
+
+    def enable_debug_logging(self, stream):
+        pass
 
 
 class DummyStream:

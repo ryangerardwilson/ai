@@ -3,15 +3,19 @@ from __future__ import annotations
 import difflib
 import os
 import re
+import select
 import shlex
 import shutil
 import subprocess
 import sys
 import tempfile
+import termios
 import threading
 import time
+import tty
+from collections import deque
 from pathlib import Path
-from typing import Iterable, Optional, List, TextIO
+from typing import Iterable, Optional, List, TextIO, Deque, Any, cast
 
 try:  # Optional readline support for interactive prompts
     import readline as _readline
@@ -56,6 +60,12 @@ class CLIRenderer:
         self._debug_reasoning = bool(debug_env)
         self._debug_stream: TextIO = sys.stderr
         self._suppress_next_user_prompt = False
+        self._hotkey_thread: Optional[threading.Thread] = None
+        self._hotkey_stop: Optional[threading.Event] = None
+        self._hotkey_events: Deque[str] = deque()
+        self._hotkey_lock = threading.Lock()
+        self._hotkey_fd: Optional[int] = None
+        self._hotkey_termios: Optional[Any] = None
 
     def _log_reasoning(self, message: str) -> None:
         if self._debug_reasoning:
@@ -64,6 +74,108 @@ class CLIRenderer:
     def enable_debug_logging(self, stream: TextIO) -> None:
         self._debug_reasoning = True
         self._debug_stream = stream
+
+    def _enqueue_hotkey_event(self, name: str) -> None:
+        if name not in {"quit", "retry"}:
+            return
+        with self._hotkey_lock:
+            self._hotkey_events.append(name)
+
+    def start_hotkey_listener(self) -> None:
+        if self._hotkey_thread and self._hotkey_thread.is_alive():
+            return
+        if not sys.stdin.isatty():
+            return
+        try:
+            fd = sys.stdin.fileno()
+        except (OSError, ValueError):
+            return
+
+        try:
+            original_attrs = termios.tcgetattr(fd)
+        except termios.error:
+            original_attrs = None
+
+        stop_event = threading.Event()
+        with self._hotkey_lock:
+            self._hotkey_events.clear()
+        self._hotkey_stop = stop_event
+        self._hotkey_fd = fd
+        self._hotkey_termios = original_attrs
+
+        def worker() -> None:
+            try:
+                if original_attrs is not None:
+                    tty.setcbreak(fd)
+                    try:
+                        attrs = termios.tcgetattr(fd)
+                        ix_flags = termios.IXON
+                        ix_off = getattr(termios, "IXOFF", 0)
+                        if isinstance(ix_off, int):
+                            ix_flags |= ix_off
+                        attrs[0] &= ~ix_flags
+                        termios.tcsetattr(fd, termios.TCSADRAIN, attrs)
+                    except termios.error:
+                        pass
+            except Exception:
+                pass
+
+            try:
+                while not stop_event.is_set():
+                    try:
+                        ready, _, _ = select.select([fd], [], [], 0.1)
+                    except (OSError, ValueError):
+                        break
+                    if not ready:
+                        continue
+                    try:
+                        data = os.read(fd, 1)
+                    except OSError:
+                        break
+                    if not data:
+                        continue
+                    key_code = data[0]
+                    if key_code in {ord("q"), ord("Q")}:
+                        self._enqueue_hotkey_event("quit")
+                    elif key_code in {ord("r"), ord("R")}:
+                        self._enqueue_hotkey_event("retry")
+            finally:
+                if original_attrs is not None:
+                    try:
+                        termios.tcsetattr(
+                            fd, termios.TCSADRAIN, cast(Any, original_attrs)
+                        )
+                    except termios.error:
+                        pass
+
+        thread = threading.Thread(target=worker, daemon=True)
+        self._hotkey_thread = thread
+        thread.start()
+
+    def stop_hotkey_listener(self) -> None:
+        stop_event = self._hotkey_stop
+        if stop_event:
+            stop_event.set()
+        thread = self._hotkey_thread
+        if thread and thread.is_alive():
+            thread.join(timeout=0.2)
+        if self._hotkey_termios is not None and self._hotkey_fd is not None:
+            try:
+                termios.tcsetattr(
+                    self._hotkey_fd, termios.TCSADRAIN, cast(Any, self._hotkey_termios)
+                )
+            except termios.error:
+                pass
+        self._hotkey_thread = None
+        self._hotkey_stop = None
+        self._hotkey_fd = None
+        self._hotkey_termios = None
+
+    def poll_hotkey_event(self) -> Optional[str]:
+        with self._hotkey_lock:
+            if self._hotkey_events:
+                return self._hotkey_events.popleft()
+        return None
 
     def _is_summary_id(self, reasoning_id: str) -> bool:
         return ":summary:" in reasoning_id
@@ -187,6 +299,7 @@ class CLIRenderer:
                         "# Help\n"
                         "- Enter a question or instruction to continue the conversation.\n"
                         "- Prefix a shell command with `!` (e.g., `!ls`).\n"
+                        "- While a reply streams, press `q` to cancel or `r` to retry the prompt.\n"
                         "- Use `/v` or `v` to draft the next prompt in Vim."
                     )
                     continue

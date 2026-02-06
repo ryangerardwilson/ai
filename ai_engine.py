@@ -192,6 +192,12 @@ class RendererProtocol(Protocol):
 
     def enable_debug_logging(self, stream: TextIO) -> None: ...
 
+    def start_hotkey_listener(self) -> None: ...
+
+    def stop_hotkey_listener(self) -> None: ...
+
+    def poll_hotkey_event(self) -> Optional[str]: ...
+
 
 def resolve_api_key(
     candidate: str | None = None, config: Optional[Dict[str, Any]] = None
@@ -345,6 +351,11 @@ class AIEngine:
         warned_no_write = False
         buffered_shell_messages: List[str] = []
         skip_model_request = False
+        pending_user_is_repeat = False
+        last_user_message_payload: Optional[str] = pending_user_message
+        last_user_message_index: Optional[int] = None
+        instruction_stack: list[str] = []
+        hotkey_hint_shown = False
 
         while True:
             rendered_messages: set[str] = set()
@@ -370,7 +381,12 @@ class AIEngine:
 
             if pending_user_message:
                 conversation_items.append(self._make_user_message(pending_user_message))
+                last_user_message_payload = pending_user_message
+                last_user_message_index = len(conversation_items) - 1
+                if not pending_user_is_repeat:
+                    instruction_stack.append(latest_instruction)
                 pending_user_message = None
+                pending_user_is_repeat = False
 
             conversation_payload = cast(Any, conversation_items)
             tools_payload = cast(Any, TOOL_DEFINITIONS)
@@ -388,8 +404,15 @@ class AIEngine:
                 response = None
                 loader_started = False
                 reasoning_buffers: dict[str, str] = {}
+                cancel_action: Optional[str] = None
 
                 try:
+                    self.renderer.start_hotkey_listener()
+                    if not hotkey_hint_shown:
+                        self.renderer.display_info(
+                            "Press q to cancel the current response or r to retry it."
+                        )
+                        hotkey_hint_shown = True
                     if not self.show_reasoning:
                         self.renderer.start_loader()
                         loader_started = True
@@ -417,6 +440,25 @@ class AIEngine:
                         reasoning=reasoning_arg,
                     ) as stream:
                         for event in stream:
+                            if cancel_action:
+                                break
+                            hotkey_event = self.renderer.poll_hotkey_event()
+                            while hotkey_event:
+                                if hotkey_event == "quit":
+                                    cancel_action = "quit"
+                                    close_fn = getattr(stream, "close", None)
+                                    if callable(close_fn):
+                                        close_fn()
+                                    break
+                                if hotkey_event == "retry":
+                                    cancel_action = "retry"
+                                    close_fn = getattr(stream, "close", None)
+                                    if callable(close_fn):
+                                        close_fn()
+                                    break
+                                hotkey_event = self.renderer.poll_hotkey_event()
+                            if cancel_action:
+                                break
                             event_type = getattr(event, "type", "")
                             self._api_debug(f"event type={event_type}")
 
@@ -522,14 +564,14 @@ class AIEngine:
                                 response = None
                                 break
 
-                        if response is None:
-                            response = getattr(stream, "response", None) or getattr(
-                                stream, "final_response", None
-                            )
-                        self._api_debug(
-                            "stream exit status=%s"
-                            % (getattr(response, "status", None) if response else None)
+                    if response is None:
+                        response = getattr(stream, "response", None) or getattr(
+                            stream, "final_response", None
                         )
+                    self._api_debug(
+                        "stream exit status=%s"
+                        % (getattr(response, "status", None) if response else None)
+                    )
 
                     if self.show_reasoning:
                         for reasoning_id, text in list(reasoning_buffers.items()):
@@ -563,6 +605,35 @@ class AIEngine:
                 finally:
                     if loader_started:
                         self.renderer.stop_loader()
+                    self.renderer.stop_hotkey_listener()
+
+                if cancel_action:
+                    if (
+                        last_user_message_index is not None
+                        and 0 <= last_user_message_index < len(conversation_items)
+                    ):
+                        del conversation_items[last_user_message_index:]
+                    if cancel_action == "retry":
+                        pending_user_message = last_user_message_payload
+                        pending_user_is_repeat = True
+                        self.renderer.display_info("Retrying prompt…")
+                        cancel_action = None
+                        continue
+                    if instruction_stack:
+                        instruction_stack.pop()
+                        latest_instruction = (
+                            instruction_stack[-1] if instruction_stack else ""
+                        )
+                    pending_user_message = None
+                    last_user_message_payload = None
+                    last_user_message_index = None
+                    warned_no_write = False
+                    self.renderer.display_info(
+                        "Prompt cancelled. You can continue the conversation."
+                    )
+                    skip_model_request = True
+                    cancel_action = None
+                    continue
 
                 if response is None:
                     continue
@@ -712,6 +783,11 @@ class AIEngine:
                 pending_context_update = prompt_context
                 warned_no_write = False
                 skip_model_request = True
+                instruction_stack.clear()
+                hotkey_hint_shown = False
+                last_user_message_payload = None
+                last_user_message_index = None
+                pending_user_is_repeat = False
                 continue
             if not follow_up:
                 return 0
@@ -772,6 +848,7 @@ class AIEngine:
                 + follow_up
                 + "\n\nReminder: use the `write` tool (or `write_file`) with full file contents when files must change."
             )
+            pending_user_is_repeat = False
 
     # Edit workflow ----------------------------------------------------
     def run_edit(
