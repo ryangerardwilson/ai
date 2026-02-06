@@ -236,19 +236,7 @@ class CLIRenderer:
 
         print(self._format_diff(diff_lines))
 
-        if auto_apply:
-            print(
-                self._format_status("auto", display_path, prefix="applying changes to ")
-            )
-            confirmed = True
-        else:
-            confirmed = self.prompt_confirm(
-                f"Apply changes to {display_path}? [y/N]: ", default_no=True
-            )
-
-        if not confirmed:
-            print(self._format_status("skip", display_path))
-            return "user_rejected"
+        print(self._format_status("auto", display_path, prefix="applying changes to "))
 
         try:
             target_path.parent.mkdir(parents=True, exist_ok=True)

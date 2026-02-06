@@ -880,14 +880,6 @@ class AIEngine:
             auto_apply=self._instruction_implies_write(instruction),
         )
 
-        if status == "user_rejected":
-            extra = self.renderer.prompt_text("add_context >>> ")
-            if extra:
-                combined_instruction = f"{instruction}\n\nAdditional context provided after review:\n{extra}"
-                return self.run_edit(
-                    path, combined_instruction, model_override=model_override
-                )
-            return 0
         if status.startswith("error"):
             self.renderer.display_error(status)
             return 1

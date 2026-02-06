@@ -13,8 +13,6 @@ from typing import Iterable
 
 
 DISALLOWED_SUBSTRINGS: tuple[str, ...] = (
-    " rm",
-    "mv ",
     "sudo",
     "chmod",
     "chown",
@@ -47,6 +45,10 @@ def _looks_like_path(token: str) -> bool:
     return token.startswith("/") or token.startswith("..")
 
 
+def _references_git(token: str) -> bool:
+    return ".git" in token
+
+
 def _tokenize(command: str) -> Iterable[str]:
     try:
         return shlex.split(command)
@@ -64,6 +66,8 @@ def _validate_command(command: str) -> None:
         raise CommandRejected(
             "Command rejected: absolute or parent paths are not allowed"
         )
+    if any(_references_git(token) for token in tokens):
+        raise CommandRejected("Command rejected: .git modifications are not permitted")
 
 
 def run_sandboxed_bash(
