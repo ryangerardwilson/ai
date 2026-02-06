@@ -57,6 +57,7 @@ python main.py
 - Type `v` at the `💬 >` prompt to pop open Vim (or `$EDITOR`) so you can draft the next instruction before sending it; you can add text after `v` to seed the buffer.
 - When supported by the model, `ai` streams the agent’s reasoning as a dim `🤔` line while it thinks; set `AI_SHOW_REASONING=0` (legacy `AI_SHOW_THINKING=0`) to suppress it.
 - `ai --read path/to/file.py --offset 400 --limit 200` — preview a specific slice of a file (line numbers mirror the assistant’s context hints).
+- `ai -d` — enable verbose OpenAI debug logs (writes to `debug.log` by default, or supply a path like `ai -d logs/session.log "prompt"`).
 - When the assistant provides file contents, the CLI shows a unified diff for each file and asks for confirmation before writing; approved files are created or updated immediately.
 - Behind the scenes the assistant uses Codex-like tools (`read_file`, `write_file`, `update_plan`, `shell`). You’ll see plan updates, command output, and diff prompts as those tools run.
 - `ai -v` — print the installed version.
@@ -86,6 +87,7 @@ the change.
 - `AI_COLOR` adjusts the ANSI color prefix for assistant output.
 - `AI_SHOW_REASONING=0` (or `AI_SHOW_THINKING=0`) disables the live reasoning stream.
 - `AI_REASONING_EFFORT` tweaks how hard reasoning models think (`minimal`, `low`, `medium`, `high`, etc.); defaults to `medium` when reasoning is enabled.
+- `AI_DEBUG_API` (alias `AI_DEBUG_REASONING`) enables verbose OpenAI interaction logs; combine with the `-d` flag to capture them automatically.
 - `AI_BASH_MAX_SECONDS` and `AI_BASH_MAX_OUTPUT` tune shell command timeout and output caps.
 - `context_settings` (in config or via env vars) tune the initial context window: `{"read_limit": 2000, "max_bytes": 51200, "include_listing": false}` by default. Override with `AI_CONTEXT_READ_LIMIT`, `AI_CONTEXT_MAX_BYTES`, `AI_CONTEXT_INCLUDE_LISTING`, or edit the config directly.
 - Models with the `-codex` suffix (for example `gpt-5-codex`) are Responses-only per [OpenAI's docs](https://platform.openai.com/docs/models/gpt-5-codex); `ai` automatically switches the edit workflow to the Responses API when you configure one.

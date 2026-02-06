@@ -11,7 +11,7 @@ import tempfile
 import threading
 import time
 from pathlib import Path
-from typing import Iterable, Optional, List
+from typing import Iterable, Optional, List, TextIO
 
 try:  # Optional readline support for interactive prompts
     import readline as _readline
@@ -46,6 +46,21 @@ class CLIRenderer:
         self._reasoning_placeholder_printed = False
         self._printed_reasoning_snippets: set[str] = set()
         self._printed_reasoning_ids: set[str] = set()
+        self._reasoning_last_snippet: dict[str, str] = {}
+        debug_env = os.environ.get("AI_DEBUG_REASONING") or os.environ.get("AI_DEBUG_API")
+        self._debug_reasoning = bool(debug_env)
+        self._debug_stream: TextIO = sys.stderr
+
+    def _log_reasoning(self, message: str) -> None:
+        if self._debug_reasoning:
+            print(f"[reasoning-debug] {message}", file=self._debug_stream)
+
+    def enable_debug_logging(self, stream: TextIO) -> None:
+        self._debug_reasoning = True
+        self._debug_stream = stream
+
+    def _is_summary_id(self, reasoning_id: str) -> bool:
+        return ":summary:" in reasoning_id
 
     # ------------------------------------------------------------------
     # Output helpers
@@ -424,14 +439,17 @@ class CLIRenderer:
     def start_reasoning(self, reasoning_id: str) -> None:
         if not self._show_reasoning:
             return
+        is_summary = self._is_summary_id(reasoning_id)
+        self._log_reasoning(f"start id={reasoning_id}")
         self._reasoning_buffers[reasoning_id] = ""
         self._active_reasoning = reasoning_id
         self._reasoning_line_len = 0
         self._printed_reasoning_ids.discard(reasoning_id)
-        if self._supports_color and sys.stdout.isatty():
+        self._reasoning_last_snippet.pop(reasoning_id, None)
+        if self._supports_color and sys.stdout.isatty() and not is_summary:
             self._render_reasoning_line(reasoning_id)
         else:
-            if not self._reasoning_placeholder_printed:
+            if not self._reasoning_placeholder_printed and not is_summary:
                 print("🤔 thinking…")
                 self._reasoning_placeholder_printed = True
 
@@ -442,6 +460,11 @@ class CLIRenderer:
         existing += delta
         self._reasoning_buffers[reasoning_id] = existing
         self._active_reasoning = reasoning_id
+        self._log_reasoning(
+            f"update id={reasoning_id} delta_len={len(delta)} buffer_len={len(existing)}"
+        )
+        if self._is_summary_id(reasoning_id):
+            return
         if self._supports_color and sys.stdout.isatty():
             self._render_reasoning_line(reasoning_id)
 
@@ -454,26 +477,33 @@ class CLIRenderer:
         if not buffer:
             buffer = ""
         already_printed = reasoning_id in self._printed_reasoning_ids
-        if self._supports_color and sys.stdout.isatty() and not already_printed:
-            snippet = buffer.replace("\r\n", "\n").replace("\r", "\n").replace("\n", " ⏎ ")
-            snippet = snippet[:200]
-            line = f"🤔 {snippet}" if snippet else "🤔"
-            padding = max(0, self._reasoning_line_len - len(line))
-            print(
-                f"\r{self.ANSI_REASONING}{line}{self.ANSI_RESET}{' ' * padding}"
-            )
-            print()
+        snippet_full = buffer.replace("\r\n", "\n").replace("\r", "\n").replace("\n", " ⏎ ")
+        self._log_reasoning(
+            f"finish id={reasoning_id} already_printed={already_printed} snippet_len={len(snippet_full)}"
+        )
+        if self._supports_color and sys.stdout.isatty():
+            if not already_printed:
+                last = self._reasoning_last_snippet.get(reasoning_id)
+                if last != snippet_full:
+                    line = f"🤔 {snippet_full}" if snippet_full else "🤔"
+                    padding = max(0, self._reasoning_line_len - len(line))
+                    print(
+                        f"\r{self.ANSI_REASONING}{line}{self.ANSI_RESET}{' ' * padding}"
+                    )
+                    self._reasoning_last_snippet[reasoning_id] = snippet_full
+                print()
         elif buffer and not sys.stdout.isatty():
-            snippet = buffer.replace("\r\n", "\n").replace("\r", "\n").replace("\n", " ⏎ ")
-            normalized = " ".join(snippet.split())
+            normalized = " ".join(snippet_full.split())
             if normalized and normalized not in self._printed_reasoning_snippets:
-                print(f"🤔 {snippet}")
+                self._log_reasoning(f"finish non-tty print id={reasoning_id} normalized_len={len(normalized)}")
+                print(f"🤔 {snippet_full}")
                 self._printed_reasoning_snippets.add(normalized)
         self._printed_reasoning_ids.add(reasoning_id)
         self._reasoning_placeholder_printed = False
         if self._active_reasoning == reasoning_id:
             self._active_reasoning = None
             self._reasoning_line_len = 0
+        self._reasoning_last_snippet.pop(reasoning_id, None)
 
     def _render_reasoning_line(self, reasoning_id: str) -> None:
         if not self._show_reasoning:
@@ -481,6 +511,13 @@ class CLIRenderer:
         buffer = self._reasoning_buffers.get(reasoning_id, "")
         snippet = buffer.replace("\r\n", "\n").replace("\r", "\n").replace("\n", " ⏎ ")
         snippet = snippet[-200:] if snippet else "thinking…"
+        if self._reasoning_last_snippet.get(reasoning_id) == snippet:
+            self._log_reasoning(f"render dedupe id={reasoning_id} snippet_len={len(snippet)}")
+            return
+        self._reasoning_last_snippet[reasoning_id] = snippet
+        self._log_reasoning(
+            f"render id={reasoning_id} snippet_len={len(snippet)} supports_color={self._supports_color}"
+        )
         line = f"🤔 {snippet}"
         if self._supports_color and sys.stdout.isatty():
             padding = max(0, self._reasoning_line_len - len(line))

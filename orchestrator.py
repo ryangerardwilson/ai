@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import os
 import subprocess
+import sys
 from pathlib import Path
 from typing import Dict, Iterable, Optional
 
@@ -66,6 +67,37 @@ class Orchestrator:
         args = self._parse_args(arg_list)
         context_defaults = self.config.get("context_settings", {})
 
+        debug_stream = None
+        close_debug_stream = False
+        if getattr(args, "debug_reasoning", None):
+            debug_value = args.debug_reasoning
+            try:
+                if debug_value is True:
+                    debug_path = Path("debug.log").resolve()
+                    debug_path.parent.mkdir(parents=True, exist_ok=True)
+                    debug_stream = debug_path.open("w", encoding="utf-8")
+                    close_debug_stream = True
+                    self.renderer.display_info(f"Debug logging -> {debug_path}")
+                else:
+                    debug_path = Path(str(debug_value)).expanduser()
+                    debug_path.parent.mkdir(parents=True, exist_ok=True)
+                    debug_stream = debug_path.open("w", encoding="utf-8")
+                    close_debug_stream = True
+                    self.renderer.display_info(f"Debug logging -> {debug_path}")
+                self.renderer.enable_debug_logging(debug_stream)
+                self.engine.enable_api_debug(debug_stream)
+            except OSError as exc:
+                self.renderer.display_error(f"Failed to enable debug logging: {exc}")
+                debug_stream = None
+                close_debug_stream = False
+
+        try:
+            return self._execute_command(args, context_defaults)
+        finally:
+            if close_debug_stream and debug_stream and debug_stream is not sys.stderr:
+                debug_stream.close()
+
+    def _execute_command(self, args: argparse.Namespace, context_defaults: Dict[str, int]) -> int:
         if args.read:
             return self._show_file_slice(
                 args.read,
@@ -216,6 +248,15 @@ class Orchestrator:
             "scope_or_prompt", nargs="?", help="Optional scope or beginning of prompt"
         )
         parser.add_argument("prompt", nargs="*", help="Additional prompt words")
+        parser.add_argument(
+            "-d",
+            "--debug",
+            dest="debug_reasoning",
+            nargs="?",
+            const=True,
+            default=None,
+            help="Enable reasoning debug logs (optionally write to file)",
+        )
         return parser.parse_args(argv)
 
     def _show_file_slice(
