@@ -62,13 +62,19 @@ def main() -> int:
 def handle_event(event: Any) -> None:
     event_type = getattr(event, "type", "unknown")
 
-    if event_type in {"response.reasoning_text.delta", "response.reasoning_summary_text.delta"}:
+    if event_type in {
+        "response.reasoning_text.delta",
+        "response.reasoning_summary_text.delta",
+    }:
         delta = getattr(event, "delta", "")
         item_id = getattr(event, "item_id", "?")
         print(f"[reasoning delta] item={item_id} -> {delta!r}")
         return
 
-    if event_type in {"response.reasoning_text.done", "response.reasoning_summary_text.done"}:
+    if event_type in {
+        "response.reasoning_text.done",
+        "response.reasoning_summary_text.done",
+    }:
         text = getattr(event, "text", "")
         item_id = getattr(event, "item_id", "?")
         print(f"[reasoning done] item={item_id} -> {text!r}")

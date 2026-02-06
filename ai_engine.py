@@ -176,13 +176,17 @@ class RendererProtocol(Protocol):
 
     def update_reasoning(self, reasoning_id: str, delta: str) -> None: ...
 
-    def finish_reasoning(self, reasoning_id: str, final: Optional[str] = None) -> None: ...
+    def finish_reasoning(
+        self, reasoning_id: str, final: Optional[str] = None
+    ) -> None: ...
 
     def start_assistant_stream(self, stream_id: str) -> None: ...
 
     def update_assistant_stream(self, stream_id: str, delta: str) -> None: ...
 
-    def finish_assistant_stream(self, stream_id: str, final_text: Optional[str] = None) -> None: ...
+    def finish_assistant_stream(
+        self, stream_id: str, final_text: Optional[str] = None
+    ) -> None: ...
 
     def enable_debug_logging(self, stream: TextIO) -> None: ...
 
@@ -248,8 +252,8 @@ class AIEngine:
             self.reasoning_effort = config_effort
         else:
             self.reasoning_effort = "medium"
-        debug_env = (
-            os.environ.get("AI_DEBUG_REASONING") or os.environ.get("AI_DEBUG_API")
+        debug_env = os.environ.get("AI_DEBUG_REASONING") or os.environ.get(
+            "AI_DEBUG_API"
         )
         self._debug_api = bool(debug_env)
         self._debug_stream: TextIO = sys.stderr
@@ -391,7 +395,9 @@ class AIEngine:
                             "effort": self.reasoning_effort,
                             "summary": "auto",
                         }
-                    reasoning_arg = cast(Any, reasoning_payload) if reasoning_payload else None
+                    reasoning_arg = (
+                        cast(Any, reasoning_payload) if reasoning_payload else None
+                    )
                     self._api_debug(
                         "stream request model=%s items=%d"
                         % (model_id, len(conversation_items))
@@ -418,7 +424,9 @@ class AIEngine:
                                 text = getattr(event, "delta", "")
                                 if not text:
                                     continue
-                                suffix = "summary" if "summary" in event_type else "text"
+                                suffix = (
+                                    "summary" if "summary" in event_type else "text"
+                                )
                                 part_key = self._reasoning_key(event, suffix=suffix)
                                 self._api_debug(
                                     f"delta id={part_key} suffix={suffix} len={len(text)}"
@@ -434,13 +442,19 @@ class AIEngine:
                             }:
                                 if not self.show_reasoning:
                                     continue
-                                suffix = "summary" if "summary" in event_type else "text"
+                                suffix = (
+                                    "summary" if "summary" in event_type else "text"
+                                )
                                 part_key = self._reasoning_key(event, suffix=suffix)
-                                final_text = getattr(event, "text", "") or reasoning_buffers.get(part_key, "")
+                                final_text = getattr(
+                                    event, "text", ""
+                                ) or reasoning_buffers.get(part_key, "")
                                 self._api_debug(
                                     f"done id={part_key} suffix={suffix} len={len(final_text)}"
                                 )
-                                self.renderer.finish_reasoning(part_key, final_text.strip() or None)
+                                self.renderer.finish_reasoning(
+                                    part_key, final_text.strip() or None
+                                )
                                 reasoning_buffers.pop(part_key, None)
                             elif event_type in {
                                 "response.reasoning_summary_part.added",
@@ -475,14 +489,18 @@ class AIEngine:
                                 stream_text = final_text or buffer_text
                                 self.renderer.finish_assistant_stream(key, stream_text)
                                 message_id = getattr(event, "item_id", None)
-                                cache_key = message_id if isinstance(message_id, str) else key
+                                cache_key = (
+                                    message_id if isinstance(message_id, str) else key
+                                )
                                 if stream_text:
                                     assistant_stream_cache[cache_key] = stream_text
                                 streamed_render_keys.add(cache_key)
                                 self._api_debug(
                                     f"assistant done id={key} len={len(stream_text)}"
                                 )
-                            elif event_type.startswith("response.function_call_arguments."):
+                            elif event_type.startswith(
+                                "response.function_call_arguments."
+                            ):
                                 delta = getattr(event, "delta", "")
                                 item_id = getattr(event, "item_id", None)
                                 name = getattr(event, "name", "")
@@ -500,7 +518,9 @@ class AIEngine:
                                 break
 
                         if response is None:
-                            response = getattr(stream, "response", None) or getattr(stream, "final_response", None)
+                            response = getattr(stream, "response", None) or getattr(
+                                stream, "final_response", None
+                            )
                         self._api_debug(
                             "stream exit status=%s"
                             % (getattr(response, "status", None) if response else None)
@@ -511,12 +531,16 @@ class AIEngine:
                             self._api_debug(
                                 f"cleanup id={reasoning_id} len={len(text)}"
                             )
-                            self.renderer.finish_reasoning(reasoning_id, text.strip() or None)
+                            self.renderer.finish_reasoning(
+                                reasoning_id, text.strip() or None
+                            )
                             reasoning_buffers.pop(reasoning_id, None)
                 except KeyboardInterrupt:
                     if self.show_reasoning:
                         for reasoning_id, text in list(reasoning_buffers.items()):
-                            self.renderer.finish_reasoning(reasoning_id, text.strip() or None)
+                            self.renderer.finish_reasoning(
+                                reasoning_id, text.strip() or None
+                            )
                     if loader_started:
                         self.renderer.stop_loader()
                     self.renderer.display_info("\nInterrupted by user.")
@@ -524,7 +548,9 @@ class AIEngine:
                 except Exception as exc:
                     if self.show_reasoning:
                         for reasoning_id, text in list(reasoning_buffers.items()):
-                            self.renderer.finish_reasoning(reasoning_id, text.strip() or None)
+                            self.renderer.finish_reasoning(
+                                reasoning_id, text.strip() or None
+                            )
                     if loader_started:
                         self.renderer.stop_loader()
                     self.renderer.display_error(f"Error: {exc}")
@@ -555,7 +581,9 @@ class AIEngine:
                             )
                             cached_text = assistant_stream_cache.pop(render_key, None)
                             final_text = cached_text or text
-                            assistant_messages.append((final_text, raw_item_id, render_key))
+                            assistant_messages.append(
+                                (final_text, raw_item_id, render_key)
+                            )
                             if cached_text is not None:
                                 streamed_render_keys.add(render_key)
                             self._api_debug(
@@ -684,11 +712,17 @@ class AIEngine:
                     self._api_debug(
                         f"shell result len={len(formatted)} truncated={formatted[:120]!r}"
                     )
+                    if formatted.strip():
+                        self.renderer.display_shell_output(formatted)
                     preview_message = (
                         "Executed shell command: `"
                         + command_text
                         + "`\n"
-                        + ("Output:\n```\n" + formatted + "\n```" if formatted.strip() else "Output: (no stdout)")
+                        + (
+                            "Output:\n```\n" + formatted + "\n```"
+                            if formatted.strip()
+                            else "Output: (no stdout)"
+                        )
                     )
                     buffered_shell_messages.append(preview_message)
                     skip_model_request = True
@@ -915,9 +949,7 @@ class AIEngine:
     ) -> tuple[str, bool]:
         args = self._parse_arguments(arguments, tool_name)
         mutated = False
-        self._api_debug(
-            f"tool_call name={tool_name} args_preview={str(args)[:200]}"
-        )
+        self._api_debug(f"tool_call name={tool_name} args_preview={str(args)[:200]}")
 
         if tool_name == "read_file":
             path_arg = args.get("path")
@@ -1140,7 +1172,9 @@ class AIEngine:
 
     def _assistant_key(self, event: Any) -> str:
         item_id = getattr(event, "item_id", "assistant")
-        content_index = getattr(event, "content_index", getattr(event, "output_index", 0))
+        content_index = getattr(
+            event, "content_index", getattr(event, "output_index", 0)
+        )
         return f"{item_id}:{content_index}"
 
     def _assistant_message_key(self, item: Any) -> str:

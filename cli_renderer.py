@@ -29,7 +29,9 @@ class CLIRenderer:
     ANSI_REASONING = "\033[38;5;242m"
     ANSI_RESET = "\033[0m"
 
-    def __init__(self, *, color_prefix: str = "\033[1;36m", show_reasoning: bool = True) -> None:
+    def __init__(
+        self, *, color_prefix: str = "\033[1;36m", show_reasoning: bool = True
+    ) -> None:
         self.color_prefix = color_prefix
         self._supports_color = sys.stdout.isatty()
         self._loader_thread: Optional[threading.Thread] = None
@@ -47,7 +49,9 @@ class CLIRenderer:
         self._printed_reasoning_snippets: set[str] = set()
         self._printed_reasoning_ids: set[str] = set()
         self._reasoning_last_snippet: dict[str, str] = {}
-        debug_env = os.environ.get("AI_DEBUG_REASONING") or os.environ.get("AI_DEBUG_API")
+        debug_env = os.environ.get("AI_DEBUG_REASONING") or os.environ.get(
+            "AI_DEBUG_API"
+        )
         self._debug_reasoning = bool(debug_env)
         self._debug_stream: TextIO = sys.stderr
 
@@ -471,13 +475,19 @@ class CLIRenderer:
     def finish_reasoning(self, reasoning_id: str, final: Optional[str] = None) -> None:
         if not self._show_reasoning:
             return
-        buffer = final if final is not None else self._reasoning_buffers.get(reasoning_id, "")
+        buffer = (
+            final
+            if final is not None
+            else self._reasoning_buffers.get(reasoning_id, "")
+        )
         if reasoning_id in self._reasoning_buffers:
             del self._reasoning_buffers[reasoning_id]
         if not buffer:
             buffer = ""
         already_printed = reasoning_id in self._printed_reasoning_ids
-        snippet_full = buffer.replace("\r\n", "\n").replace("\r", "\n").replace("\n", " ⏎ ")
+        snippet_full = (
+            buffer.replace("\r\n", "\n").replace("\r", "\n").replace("\n", " ⏎ ")
+        )
         self._log_reasoning(
             f"finish id={reasoning_id} already_printed={already_printed} snippet_len={len(snippet_full)}"
         )
@@ -495,7 +505,9 @@ class CLIRenderer:
         elif buffer and not sys.stdout.isatty():
             normalized = " ".join(snippet_full.split())
             if normalized and normalized not in self._printed_reasoning_snippets:
-                self._log_reasoning(f"finish non-tty print id={reasoning_id} normalized_len={len(normalized)}")
+                self._log_reasoning(
+                    f"finish non-tty print id={reasoning_id} normalized_len={len(normalized)}"
+                )
                 print(f"🤔 {snippet_full}")
                 self._printed_reasoning_snippets.add(normalized)
         self._printed_reasoning_ids.add(reasoning_id)
@@ -512,7 +524,9 @@ class CLIRenderer:
         snippet = buffer.replace("\r\n", "\n").replace("\r", "\n").replace("\n", " ⏎ ")
         snippet = snippet[-200:] if snippet else "thinking…"
         if self._reasoning_last_snippet.get(reasoning_id) == snippet:
-            self._log_reasoning(f"render dedupe id={reasoning_id} snippet_len={len(snippet)}")
+            self._log_reasoning(
+                f"render dedupe id={reasoning_id} snippet_len={len(snippet)}"
+            )
             return
         self._reasoning_last_snippet[reasoning_id] = snippet
         self._log_reasoning(
@@ -552,16 +566,26 @@ class CLIRenderer:
             new_value = buffer + delta
             self._assistant_streams[stream_id] = new_value
             if self._supports_color and sys.stdout.isatty():
-                print(f"{self.ANSI_MEDIUM_GRAY}{delta}{self.ANSI_RESET}", end="", flush=True)
+                print(
+                    f"{self.ANSI_MEDIUM_GRAY}{delta}{self.ANSI_RESET}",
+                    end="",
+                    flush=True,
+                )
 
-    def finish_assistant_stream(self, stream_id: str, final_text: Optional[str] = None) -> None:
+    def finish_assistant_stream(
+        self, stream_id: str, final_text: Optional[str] = None
+    ) -> None:
         buffer = self._assistant_streams.pop(stream_id, "")
         if stream_id in self._assistant_order:
             self._assistant_order.remove(stream_id)
         if final_text is not None and final_text != buffer:
             missing = final_text[len(buffer) :]
             if missing and self._supports_color and sys.stdout.isatty():
-                print(f"{self.ANSI_MEDIUM_GRAY}{missing}{self.ANSI_RESET}", end="", flush=True)
+                print(
+                    f"{self.ANSI_MEDIUM_GRAY}{missing}{self.ANSI_RESET}",
+                    end="",
+                    flush=True,
+                )
         if self._supports_color and sys.stdout.isatty():
             print()
 

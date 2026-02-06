@@ -79,7 +79,9 @@ class DummyRenderer:
     def update_assistant_stream(self, stream_id: str, delta: str) -> None:
         self.assistant_stream_chunks.append(delta)
 
-    def finish_assistant_stream(self, stream_id: str, final_text: str | None = None) -> None:
+    def finish_assistant_stream(
+        self, stream_id: str, final_text: str | None = None
+    ) -> None:
         self.assistant_stream_final = final_text
 
 

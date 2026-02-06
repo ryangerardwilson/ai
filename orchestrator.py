@@ -97,7 +97,9 @@ class Orchestrator:
             if close_debug_stream and debug_stream and debug_stream is not sys.stderr:
                 debug_stream.close()
 
-    def _execute_command(self, args: argparse.Namespace, context_defaults: Dict[str, int]) -> int:
+    def _execute_command(
+        self, args: argparse.Namespace, context_defaults: Dict[str, int]
+    ) -> int:
         if args.read:
             return self._show_file_slice(
                 args.read,
