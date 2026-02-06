@@ -102,3 +102,40 @@ def test_display_user_prompt_collapses_newlines(capsys):
     out = capsys.readouterr().out.strip()
     assert out.startswith("💬 > ")
     assert " ⏎ " in out
+
+
+def test_reasoning_updates_output(capsys):
+    renderer = CLIRenderer(show_reasoning=True)
+    renderer._supports_color = False  # type: ignore[attr-defined]
+
+    renderer.start_reasoning("step-1")
+    renderer.update_reasoning("step-1", "analyzing repository")
+    renderer.finish_reasoning("step-1", "analyzing repository")
+
+    out = capsys.readouterr().out
+    assert "🤔" in out
+    assert "analyzing repository" in out
+
+
+def test_reasoning_disabled_no_output(capsys):
+    renderer = CLIRenderer(show_reasoning=False)
+    renderer._supports_color = False  # type: ignore[attr-defined]
+
+    renderer.start_reasoning("step-1")
+    renderer.update_reasoning("step-1", "should not appear")
+    renderer.finish_reasoning("step-1", "should not appear")
+
+    out = capsys.readouterr().out
+    assert "🤔" not in out
+
+
+def test_assistant_stream(capsys):
+    renderer = CLIRenderer()
+    renderer._supports_color = False  # type: ignore[attr-defined]
+
+    renderer.start_assistant_stream("msg-1")
+    renderer.update_assistant_stream("msg-1", "Hello")
+    renderer.finish_assistant_stream("msg-1", "Hello world")
+
+    out = capsys.readouterr().out
+    assert out == ""

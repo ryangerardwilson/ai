@@ -25,7 +25,18 @@ PRIMARY_FLAG_SET = {"-h", "--help", "-v", "--version", "-V", "-u", "--upgrade"}
 class Orchestrator:
     def __init__(self) -> None:
         self.config = load_config()
-        self.renderer = CLIRenderer(color_prefix=self._resolve_color())
+        show_reasoning = self.config.get("show_reasoning")
+        if show_reasoning is None:
+            show_reasoning = self.config.get("show_thinking", True)
+        env_toggle = os.environ.get("AI_SHOW_REASONING")
+        if env_toggle is None:
+            env_toggle = os.environ.get("AI_SHOW_THINKING")
+        if env_toggle is not None:
+            show_reasoning = env_toggle.lower() not in {"0", "false", "no"}
+        self.renderer = CLIRenderer(
+            color_prefix=self._resolve_color(),
+            show_reasoning=bool(show_reasoning),
+        )
         self.engine = AIEngine(
             renderer=self.renderer,
             config=self.config,

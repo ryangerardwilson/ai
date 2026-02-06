@@ -13,7 +13,7 @@
 ## 3. Primary Workflows
 | Flow | Invocation Example | Description | Key Sources | | --- | --- | --- |
 --- | | Interactive conversation | `ai` | Analyze the current repository,
-stream answers, accept iterative `💬 >` prompts, and support buffered `!command`
+stream answers, accept iterative `💬 >` prompts, surface streamed 🤔 reasoning, and support buffered `!command`
 shell execution whose output is injected with your next instruction. |
 [README.md](README.md), [main.py](main.py) | | Prompt-only run | `ai "how do I
 write a release workflow?"` | Execute a single inference without entering

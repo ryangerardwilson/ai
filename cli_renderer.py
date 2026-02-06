@@ -26,9 +26,10 @@ class CLIRenderer:
     ANSI_MEDIUM_GRAY = "\033[38;5;245m"
     ANSI_DIM_GRAY = "\033[90m"
     ANSI_DARKER_GRAY = "\033[38;5;240m"
+    ANSI_REASONING = "\033[38;5;242m"
     ANSI_RESET = "\033[0m"
 
-    def __init__(self, *, color_prefix: str = "\033[1;36m") -> None:
+    def __init__(self, *, color_prefix: str = "\033[1;36m", show_reasoning: bool = True) -> None:
         self.color_prefix = color_prefix
         self._supports_color = sys.stdout.isatty()
         self._loader_thread: Optional[threading.Thread] = None
@@ -36,6 +37,15 @@ class CLIRenderer:
         self._readline = _readline
         self._readline_prompt: str = ""
         self._completion_messages: List[str] = []
+        self._show_reasoning = show_reasoning
+        self._reasoning_buffers: dict[str, str] = {}
+        self._active_reasoning: Optional[str] = None
+        self._reasoning_line_len = 0
+        self._assistant_streams: dict[str, str] = {}
+        self._assistant_order: list[str] = []
+        self._reasoning_placeholder_printed = False
+        self._printed_reasoning_snippets: set[str] = set()
+        self._printed_reasoning_ids: set[str] = set()
 
     # ------------------------------------------------------------------
     # Output helpers
@@ -242,6 +252,10 @@ class CLIRenderer:
     def start_loader(
         self,
     ) -> tuple[Optional[threading.Event], Optional[threading.Thread]]:
+        if self._show_reasoning and self._active_reasoning:
+            return None, None
+        if self._assistant_streams:
+            return None, None
         if self._loader_thread and self._loader_thread.is_alive():
             return self._loader_stop, self._loader_thread
 
@@ -406,6 +420,113 @@ class CLIRenderer:
             print(f"{self.ANSI_DARKER_GRAY}{formatted}{self.ANSI_RESET}")
         else:
             print(formatted)
+
+    def start_reasoning(self, reasoning_id: str) -> None:
+        if not self._show_reasoning:
+            return
+        self._reasoning_buffers[reasoning_id] = ""
+        self._active_reasoning = reasoning_id
+        self._reasoning_line_len = 0
+        self._printed_reasoning_ids.discard(reasoning_id)
+        if self._supports_color and sys.stdout.isatty():
+            self._render_reasoning_line(reasoning_id)
+        else:
+            if not self._reasoning_placeholder_printed:
+                print("🤔 thinking…")
+                self._reasoning_placeholder_printed = True
+
+    def update_reasoning(self, reasoning_id: str, delta: str) -> None:
+        if not self._show_reasoning:
+            return
+        existing = self._reasoning_buffers.get(reasoning_id, "")
+        existing += delta
+        self._reasoning_buffers[reasoning_id] = existing
+        self._active_reasoning = reasoning_id
+        if self._supports_color and sys.stdout.isatty():
+            self._render_reasoning_line(reasoning_id)
+
+    def finish_reasoning(self, reasoning_id: str, final: Optional[str] = None) -> None:
+        if not self._show_reasoning:
+            return
+        buffer = final if final is not None else self._reasoning_buffers.get(reasoning_id, "")
+        if reasoning_id in self._reasoning_buffers:
+            del self._reasoning_buffers[reasoning_id]
+        if not buffer:
+            buffer = ""
+        already_printed = reasoning_id in self._printed_reasoning_ids
+        if self._supports_color and sys.stdout.isatty() and not already_printed:
+            snippet = buffer.replace("\r\n", "\n").replace("\r", "\n").replace("\n", " ⏎ ")
+            snippet = snippet[:200]
+            line = f"🤔 {snippet}" if snippet else "🤔"
+            padding = max(0, self._reasoning_line_len - len(line))
+            print(
+                f"\r{self.ANSI_REASONING}{line}{self.ANSI_RESET}{' ' * padding}"
+            )
+            print()
+        elif buffer and not sys.stdout.isatty():
+            snippet = buffer.replace("\r\n", "\n").replace("\r", "\n").replace("\n", " ⏎ ")
+            normalized = " ".join(snippet.split())
+            if normalized and normalized not in self._printed_reasoning_snippets:
+                print(f"🤔 {snippet}")
+                self._printed_reasoning_snippets.add(normalized)
+        self._printed_reasoning_ids.add(reasoning_id)
+        self._reasoning_placeholder_printed = False
+        if self._active_reasoning == reasoning_id:
+            self._active_reasoning = None
+            self._reasoning_line_len = 0
+
+    def _render_reasoning_line(self, reasoning_id: str) -> None:
+        if not self._show_reasoning:
+            return
+        buffer = self._reasoning_buffers.get(reasoning_id, "")
+        snippet = buffer.replace("\r\n", "\n").replace("\r", "\n").replace("\n", " ⏎ ")
+        snippet = snippet[-200:] if snippet else "thinking…"
+        line = f"🤔 {snippet}"
+        if self._supports_color and sys.stdout.isatty():
+            padding = max(0, self._reasoning_line_len - len(line))
+            print(
+                f"\r{self.ANSI_REASONING}{line}{self.ANSI_RESET}{' ' * padding}",
+                end="",
+                flush=True,
+            )
+            self._reasoning_line_len = len(line)
+        else:
+            print(line)
+
+    def start_assistant_stream(self, stream_id: str) -> None:
+        if stream_id in self._assistant_streams:
+            return
+        if self._active_reasoning:
+            print()
+            self._active_reasoning = None
+            self._reasoning_line_len = 0
+        self._assistant_streams[stream_id] = ""
+        self._assistant_order.append(stream_id)
+        if self._supports_color and sys.stdout.isatty():
+            prefix = f"{self.ANSI_MEDIUM_GRAY}🤖 > {self.ANSI_RESET}"
+            print(prefix, end="", flush=True)
+
+    def update_assistant_stream(self, stream_id: str, delta: str) -> None:
+        buffer = self._assistant_streams.get(stream_id)
+        if buffer is None:
+            self.start_assistant_stream(stream_id)
+            buffer = self._assistant_streams.get(stream_id, "")
+        if delta:
+            new_value = buffer + delta
+            self._assistant_streams[stream_id] = new_value
+            if self._supports_color and sys.stdout.isatty():
+                print(f"{self.ANSI_MEDIUM_GRAY}{delta}{self.ANSI_RESET}", end="", flush=True)
+
+    def finish_assistant_stream(self, stream_id: str, final_text: Optional[str] = None) -> None:
+        buffer = self._assistant_streams.pop(stream_id, "")
+        if stream_id in self._assistant_order:
+            self._assistant_order.remove(stream_id)
+        if final_text is not None and final_text != buffer:
+            missing = final_text[len(buffer) :]
+            if missing and self._supports_color and sys.stdout.isatty():
+                print(f"{self.ANSI_MEDIUM_GRAY}{missing}{self.ANSI_RESET}", end="", flush=True)
+        if self._supports_color and sys.stdout.isatty():
+            print()
 
     def _edit_prompt_via_editor(self, seed_text: str) -> Optional[str]:
         candidates = [

@@ -171,6 +171,18 @@ class RendererProtocol(Protocol):
 
     def consume_completion_messages(self) -> list[str]: ...
 
+    def start_reasoning(self, reasoning_id: str) -> None: ...
+
+    def update_reasoning(self, reasoning_id: str, delta: str) -> None: ...
+
+    def finish_reasoning(self, reasoning_id: str, final: Optional[str] = None) -> None: ...
+
+    def start_assistant_stream(self, stream_id: str) -> None: ...
+
+    def update_assistant_stream(self, stream_id: str, delta: str) -> None: ...
+
+    def finish_assistant_stream(self, stream_id: str, final_text: Optional[str] = None) -> None: ...
+
 
 def resolve_api_key(
     candidate: str | None = None, config: Optional[Dict[str, Any]] = None
@@ -215,6 +227,24 @@ class AIEngine:
         self.default_model = default_model
         self._api_key = resolve_api_key(config=config)
         self.client = openai.OpenAI(api_key=self._api_key)
+        env_toggle = os.environ.get("AI_SHOW_REASONING")
+        if env_toggle is None:
+            env_toggle = os.environ.get("AI_SHOW_THINKING")
+        config_value = config.get("show_reasoning")
+        if config_value is None:
+            config_value = config.get("show_thinking", True)
+        if env_toggle is not None:
+            self.show_reasoning = env_toggle.lower() not in {"0", "false", "no"}
+        else:
+            self.show_reasoning = bool(config_value)
+        env_effort = os.environ.get("AI_REASONING_EFFORT")
+        config_effort = self.config.get("reasoning_effort")
+        if env_effort:
+            self.reasoning_effort = env_effort
+        elif isinstance(config_effort, str) and config_effort:
+            self.reasoning_effort = config_effort
+        else:
+            self.reasoning_effort = "medium"
 
     # Conversation -----------------------------------------------------
     def run_conversation(self, prompt: str, scope: Optional[str]) -> int:
@@ -320,35 +350,147 @@ class AIEngine:
             conversation_payload = cast(Any, conversation_items)
             tools_payload = cast(Any, TOOL_DEFINITIONS)
             tool_call_handled = False
-            assistant_messages: list[str] = []
+            assistant_messages: list[tuple[str, Optional[str], str]] = []
+            assistant_stream_buffers: dict[str, str] = {}
+            assistant_stream_cache: dict[str, str] = {}
+            streamed_render_keys: set[str] = set()
             previous_message: Optional[str] = None
             pending_reasoning_queue: list[Dict[str, Any]] = []
 
             if skip_model_request:
                 skip_model_request = False
             else:
-                self.renderer.start_loader()
+                response = None
+                loader_started = False
+                reasoning_buffers: dict[str, str] = {}
+
                 try:
-                    response = self.client.responses.create(
+                    if not self.show_reasoning:
+                        self.renderer.start_loader()
+                        loader_started = True
+
+                    reasoning_payload = None
+                    if self.show_reasoning and self.reasoning_effort:
+                        reasoning_payload = {
+                            "effort": self.reasoning_effort,
+                            "summary": "auto",
+                        }
+                    reasoning_arg = cast(Any, reasoning_payload) if reasoning_payload else None
+
+                    with self.client.responses.stream(
                         model=model_id,
                         instructions=system_prompt,
                         input=conversation_payload,
                         tools=tools_payload,
                         tool_choice="auto",
-                    )
+                        reasoning=reasoning_arg,
+                    ) as stream:
+                        for event in stream:
+                            event_type = getattr(event, "type", "")
+
+                            if event_type == "response.reasoning_text.delta":
+                                if not self.show_reasoning:
+                                    continue
+                                text = getattr(event, "delta", "")
+                                if not text:
+                                    continue
+                                part_key = self._reasoning_key(event, suffix="summary" if "summary" in event_type else "text")
+                                if part_key not in reasoning_buffers:
+                                    reasoning_buffers[part_key] = ""
+                                    self.renderer.start_reasoning(part_key)
+                                reasoning_buffers[part_key] += text
+                                self.renderer.update_reasoning(part_key, text)
+                            elif event_type == "response.reasoning_text.done":
+                                if not self.show_reasoning:
+                                    continue
+                                part_key = self._reasoning_key(
+                                    event,
+                                    suffix="text",
+                                )
+                                final_text = getattr(event, "text", "") or reasoning_buffers.get(part_key, "")
+                                self.renderer.finish_reasoning(part_key, final_text.strip() or None)
+                                reasoning_buffers.pop(part_key, None)
+                            elif event_type in {
+                                "response.reasoning_summary_text.delta",
+                                "response.reasoning_summary_text.done",
+                                "response.reasoning_summary_part.added",
+                                "response.reasoning_summary_part.done",
+                            }:
+                                continue
+                            elif event_type == "response.completed":
+                                response = getattr(event, "response", None)
+                            elif event_type in {
+                                "response.reasoning_summary_part.added",
+                                "response.reasoning_summary_part.done",
+                            }:
+                                continue
+                            elif event_type == "response.output_text.delta":
+                                delta = getattr(event, "delta", "")
+                                if not delta:
+                                    continue
+                                if loader_started:
+                                    self.renderer.stop_loader()
+                                    loader_started = False
+                                key = self._assistant_key(event)
+                                if key not in assistant_stream_buffers:
+                                    assistant_stream_buffers[key] = ""
+                                    self.renderer.start_assistant_stream(key)
+                                assistant_stream_buffers[key] += delta
+                                self.renderer.update_assistant_stream(key, delta)
+                            elif event_type == "response.output_text.done":
+                                key = self._assistant_key(event)
+                                final_text = getattr(event, "text", "")
+                                buffer_text = assistant_stream_buffers.pop(key, "")
+                                stream_text = final_text or buffer_text
+                                self.renderer.finish_assistant_stream(key, stream_text)
+                                message_id = getattr(event, "item_id", None)
+                                cache_key = message_id if isinstance(message_id, str) else key
+                                if stream_text:
+                                    assistant_stream_cache[cache_key] = stream_text
+                                streamed_render_keys.add(cache_key)
+                            elif event_type == "response.error":
+                                message = getattr(event, "error", None)
+                                if message:
+                                    err_text = getattr(message, "message", str(message))
+                                    self.renderer.display_error(err_text)
+                                response = None
+                                break
+
+                        if response is None:
+                            response = getattr(stream, "response", None) or getattr(stream, "final_response", None)
+
+                    if self.show_reasoning:
+                        for reasoning_id, text in list(reasoning_buffers.items()):
+                            self.renderer.finish_reasoning(reasoning_id, text.strip() or None)
+                            reasoning_buffers.pop(reasoning_id, None)
                 except KeyboardInterrupt:
+                    if self.show_reasoning:
+                        for reasoning_id, text in list(reasoning_buffers.items()):
+                            self.renderer.finish_reasoning(reasoning_id, text.strip() or None)
+                    if loader_started:
+                        self.renderer.stop_loader()
                     self.renderer.display_info("\nInterrupted by user.")
                     return 130
                 except Exception as exc:
+                    if self.show_reasoning:
+                        for reasoning_id, text in list(reasoning_buffers.items()):
+                            self.renderer.finish_reasoning(reasoning_id, text.strip() or None)
+                    if loader_started:
+                        self.renderer.stop_loader()
                     self.renderer.display_error(f"Error: {exc}")
                     return 1
                 finally:
-                    self.renderer.stop_loader()
+                    if loader_started:
+                        self.renderer.stop_loader()
+
+                if response is None:
+                    continue
 
                 for item in getattr(response, "output", []) or []:
                     item_type = getattr(item, "type", "")
 
                     if item_type == "message":
+                        raw_item_id = getattr(item, "id", None)
                         text_parts: List[str] = []
                         for block in getattr(item, "content", []) or []:
                             if getattr(block, "type", "").endswith("text"):
@@ -356,9 +498,18 @@ class AIEngine:
                         text = "".join(text_parts).strip()
                         pending_reasoning_queue.clear()
                         if text:
-                            assistant_messages.append(text)
+                            render_key = (
+                                raw_item_id
+                                if isinstance(raw_item_id, str)
+                                else self._assistant_message_key(item)
+                            )
+                            cached_text = assistant_stream_cache.pop(render_key, None)
+                            final_text = cached_text or text
+                            assistant_messages.append((final_text, raw_item_id, render_key))
+                            if cached_text is not None:
+                                streamed_render_keys.add(render_key)
                             conversation_items.append(
-                                self._make_assistant_message(text)
+                                self._make_assistant_message(final_text)
                             )
 
                     elif item_type in {"tool_call", "function_call"}:
@@ -420,13 +571,17 @@ class AIEngine:
                 continue
 
             manual_mutation = False
-            for message in assistant_messages:
-                if message not in rendered_messages and not displayed_current_cycle:
-                    self.renderer.display_assistant_message(message)
-                    rendered_messages.add(message)
+            for message_text, message_id, render_key in assistant_messages:
+                if (
+                    render_key not in rendered_messages
+                    and render_key not in streamed_render_keys
+                    and not displayed_current_cycle
+                ):
+                    self.renderer.display_assistant_message(message_text)
+                    rendered_messages.add(render_key)
                     displayed_current_cycle = True
-                previous_message = message
-                for filename, content in self._detect_generated_files(message):
+                previous_message = message_text
+                for filename, content in self._detect_generated_files(message_text):
                     status = self._apply_file_update(
                         filename,
                         content,
@@ -446,10 +601,10 @@ class AIEngine:
                 if not warned_no_write and any(
                     re.search(
                         r"\b(created|saved|written|added|generated)\b",
-                        msg,
+                        msg_text,
                         re.IGNORECASE,
                     )
-                    for msg in assistant_messages
+                    for msg_text, _, _ in assistant_messages
                 ):
                     pending_user_message = "It appears no files changed. Please call the `write` tool (alias: `write_file`) with the full contents so the file can be created."
                     warned_no_write = True
@@ -910,6 +1065,25 @@ class AIEngine:
                 normalized,
             )
         )
+
+    def _reasoning_key(self, event: Any, suffix: str = "text") -> str:
+        item_id = getattr(event, "item_id", "reasoning")
+        if suffix == "summary":
+            index = getattr(event, "summary_index", getattr(event, "output_index", 0))
+            label = "summary"
+        else:
+            index = getattr(event, "content_index", getattr(event, "output_index", 0))
+            label = "text"
+        return f"{item_id}:{label}:{index}"
+
+    def _assistant_key(self, event: Any) -> str:
+        item_id = getattr(event, "item_id", "assistant")
+        content_index = getattr(event, "content_index", getattr(event, "output_index", 0))
+        return f"{item_id}:{content_index}"
+
+    def _assistant_message_key(self, item: Any) -> str:
+        item_id = getattr(item, "id", "assistant")
+        return f"{item_id}:0"
 
     def _coalesce_responses_text(self, response: Any) -> str:
         if response is None:
