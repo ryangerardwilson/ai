@@ -63,9 +63,7 @@ class Orchestrator:
                 self.renderer.display_info("Prompt cancelled (empty message).")
                 return 0
             self.renderer.display_user_prompt(prompt_text)
-            return self.engine.run_conversation(
-                prompt_text, None, display_prompt=False
-            )
+            return self.engine.run_conversation(prompt_text, None, display_prompt=False)
 
         args = self._parse_args(arg_list)
         context_defaults = self.config.get("context_settings", {})
