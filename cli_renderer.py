@@ -237,9 +237,7 @@ class CLIRenderer:
         print(self._format_diff(diff_lines))
 
         if new_text == "":
-            print(
-                self._format_status("auto", display_path, prefix="removing ")
-            )
+            print(self._format_status("auto", display_path, prefix="removing "))
             return "delete_requested"
 
         print(self._format_status("auto", display_path, prefix="applying changes to "))
