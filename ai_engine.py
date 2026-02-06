@@ -880,6 +880,13 @@ class AIEngine:
             auto_apply=self._instruction_implies_write(instruction),
         )
 
+        if status == "delete_requested":
+            delete_status = self._delete_path_via_shell(target_path, Path.cwd())
+            if delete_status.startswith("error"):
+                self.renderer.display_error(delete_status)
+                return 1
+            return 0
+
         if status.startswith("error"):
             self.renderer.display_error(status)
             return 1
@@ -947,13 +954,47 @@ class AIEngine:
             self.renderer.display_error(message)
             return message
 
-        return self.renderer.review_file_update(
+        status = self.renderer.review_file_update(
             target_path=path,
             display_path=relative,
             old_text=old_text,
             new_text=content,
             auto_apply=auto_apply,
         )
+
+        if status == "delete_requested":
+            return self._delete_path_via_shell(path, base_root)
+
+        return status
+
+    def _delete_path_via_shell(self, path: Path, base_root: Path) -> str:
+        try:
+            relative = path.relative_to(base_root)
+        except ValueError:
+            return "error: delete outside project root"
+
+        rm_cmd = f"rm {shlex.quote(str(relative))}"
+        try:
+            result = run_sandboxed_bash(
+                rm_cmd,
+                cwd=base_root,
+                scope_root=base_root,
+                timeout=30,
+                max_output_bytes=20000,
+            )
+        except CommandRejected as exc:
+            return f"error: {exc}"
+        except Exception as exc:  # pragma: no cover - subprocess failures
+            return f"error: failed to delete {relative}: {exc}"
+
+        formatted = format_command_result(result)
+        self.renderer.display_info(f"$ {rm_cmd}")
+        if formatted.strip():
+            self.renderer.display_shell_output(formatted)
+
+        if result.exit_code != 0:
+            return f"error: rm exited with {result.exit_code}"
+        return "applied"
 
     def _handle_tool_call(
         self,
@@ -1119,12 +1160,13 @@ class AIEngine:
                 max_output_bytes=max_output_bytes,
             )
             formatted = format_command_result(result)
+            rendered_parts = [f"$ {command_str}"]
             if formatted.strip():
-                rendered = f"$ {command_str}\n\n{formatted}"
+                rendered_parts.append(formatted)
             else:
-                rendered = "(no output)"
-            if formatted.strip():
-                self.renderer.display_shell_output(rendered)
+                rendered_parts.append("(no output)")
+            rendered = "\n\n".join(rendered_parts)
+            self.renderer.display_shell_output(rendered)
             return rendered, False
         except CommandRejected as exc:
             message = f"command rejected: {exc}"
