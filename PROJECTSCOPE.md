@@ -13,10 +13,10 @@
 ## 3. Primary Workflows
 | Flow | Invocation Example | Description | Key Sources | | --- | --- | --- |
 --- | | Interactive conversation | `ai` | Analyze the current repository,
-stream answers, accept iterative `QR >` prompts, and support buffered
-`!command` shell execution whose output is injected with your next instruction.
-| [README.md](README.md), [main.py](main.py) | | Prompt-only run | `ai "how do
-I write a release workflow?"` | Execute a single inference without entering
+stream answers, accept iterative `💬 >` prompts, and support buffered `!command`
+shell execution whose output is injected with your next instruction. |
+[README.md](README.md), [main.py](main.py) | | Prompt-only run | `ai "how do I
+write a release workflow?"` | Execute a single inference without entering
 follow-up mode. | [README.md](README.md), [main.py](main.py) | | File rewrite
 mode | `ai path/to/file.py "replace legacy API usage"` | Request a full-file
 rewrite through the edit model, review the unified diff with line numbers, and

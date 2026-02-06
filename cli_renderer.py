@@ -25,6 +25,7 @@ class CLIRenderer:
     ANSI_WHITE = "\033[97m"
     ANSI_MEDIUM_GRAY = "\033[38;5;245m"
     ANSI_DIM_GRAY = "\033[90m"
+    ANSI_DARKER_GRAY = "\033[38;5;240m"
     ANSI_RESET = "\033[0m"
 
     def __init__(self, *, color_prefix: str = "\033[1;36m") -> None:
@@ -121,10 +122,10 @@ class CLIRenderer:
     def prompt_follow_up(self) -> Optional[str]:
         while True:
             if self._readline:
-                self._readline_prompt = "QR > "
+                self._readline_prompt = "💬 > "
             self._completion_messages.clear()
             try:
-                raw_value = input("QR > ")
+                raw_value = input("💬 > ")
             except KeyboardInterrupt:
                 print("\nInterrupted by user.")
                 return None
@@ -400,7 +401,11 @@ class CLIRenderer:
         sanitized = sanitized.replace("\n", " ⏎ ")
         limit = 500
         truncated = sanitized if len(sanitized) <= limit else sanitized[:limit] + "…"
-        self.display_info(f"You > {truncated}")
+        formatted = f"💬 > {truncated}" if truncated else "💬 >"
+        if self._supports_color:
+            print(f"{self.ANSI_DARKER_GRAY}{formatted}{self.ANSI_RESET}")
+        else:
+            print(formatted)
 
     def _edit_prompt_via_editor(self, seed_text: str) -> Optional[str]:
         candidates = [
@@ -445,9 +450,7 @@ class CLIRenderer:
 
             rc = subprocess.call(editor_args + [temp_path])
             if rc != 0:
-                self.display_error(
-                    f"Editor exited with status {rc}; prompt unchanged."
-                )
+                self.display_error(f"Editor exited with status {rc}; prompt unchanged.")
                 return None
 
             with open(temp_path, "r", encoding="utf-8") as reader:

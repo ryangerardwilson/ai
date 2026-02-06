@@ -46,7 +46,7 @@ python main.py
 
 ## Usage
 
-- `ai` — analyze the current repository and start an interactive Q&A conversation (use the `QR >` prompt to continue, or press Enter to finish).
+- `ai` — analyze the current repository and start an interactive Q&A conversation (use the `💬 >` prompt to continue, or press Enter to finish).
 - `ai "how do I write a release workflow?"` — run a one-off prompt; the assistant answers once and exits.
 - `ai path/to/file.py "replace legacy API usage"` — trigger file-edit mode: the model rewrites the file, you review the diff, and confirm or reject the change.
 - `ai path/to/directory "summarize the services"` — scope the conversation to that directory; the assistant gathers context from the subtree before replying.
@@ -54,7 +54,7 @@ python main.py
 - `ai docs/architecture "summarize these docs"` — limit the analysis to the `docs/architecture` directory before answering.
 - `ai v` — open Vim (or `$EDITOR`) immediately to craft the first prompt before the session starts.
 - In interactive mode you can run sandboxed shell commands with `!command` (for example `!ls src`). The output is shown immediately and the transcript is attached to the conversation the next time you send a regular prompt.
-- Type `v` at the `QR >` prompt to pop open Vim (or `$EDITOR`) so you can draft the next instruction before sending it; you can add text after `v` to seed the buffer.
+- Type `v` at the `💬 >` prompt to pop open Vim (or `$EDITOR`) so you can draft the next instruction before sending it; you can add text after `v` to seed the buffer.
 - `ai --read path/to/file.py --offset 400 --limit 200` — preview a specific slice of a file (line numbers mirror the assistant’s context hints).
 - When the assistant provides file contents, the CLI shows a unified diff for each file and asks for confirmation before writing; approved files are created or updated immediately.
 - Behind the scenes the assistant uses Codex-like tools (`read_file`, `write_file`, `update_plan`, `shell`). You’ll see plan updates, command output, and diff prompts as those tools run.
@@ -62,7 +62,7 @@ python main.py
 - `ai -u` — rerun the installer script if a newer release exists.
 - `ai -h` — show the CLI help summary.
 
-Each response streams live to your terminal, followed by the `QR >` prompt so
+Each response streams live to your terminal, followed by the `💬 >` prompt so
 you can iterate. Editing mode (triggered by a file scope or a conversation-
 generated file) shows a unified diff and preserves permissions when you approve
 the change.

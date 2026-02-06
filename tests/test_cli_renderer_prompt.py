@@ -4,7 +4,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import pytest
 
 from cli_renderer import CLIRenderer
 
@@ -91,8 +90,8 @@ def test_display_user_prompt_truncates(capsys):
     renderer.display_user_prompt("x" * 510)
 
     out = capsys.readouterr().out.strip()
-    assert out.endswith("x" * 500 + "…")
-    assert out.startswith("You > ")
+    assert out.endswith("".join(["x" * 500, "…"]))
+    assert out.startswith("💬 > ")
 
 
 def test_display_user_prompt_collapses_newlines(capsys):
@@ -101,4 +100,5 @@ def test_display_user_prompt_collapses_newlines(capsys):
 
     renderer.display_user_prompt("line1\nline2")
     out = capsys.readouterr().out.strip()
+    assert out.startswith("💬 > ")
     assert " ⏎ " in out
