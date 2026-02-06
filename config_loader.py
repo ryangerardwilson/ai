@@ -13,20 +13,11 @@ from pathlib import Path
 from typing import Any, Dict
 
 from config_paths import get_config_path
-from contextualizer import DEFAULT_READ_LIMIT, MAX_READ_BYTES
-
 DEFAULT_MODEL = "gpt-5-codex"
-
-DEFAULT_CONTEXT_SETTINGS: Dict[str, Any] = {
-    "read_limit": DEFAULT_READ_LIMIT,
-    "max_bytes": MAX_READ_BYTES,
-    "include_listing": False,
-}
 
 DEFAULTS: Dict[str, Any] = {
     "openai_api_key": "",
     "model": DEFAULT_MODEL,
-    "context_settings": DEFAULT_CONTEXT_SETTINGS.copy(),
 }
 
 
@@ -42,14 +33,7 @@ def load_config() -> Dict[str, Any]:
 
     cfg = {**DEFAULTS, **data}
 
-    context_entry = data.get("context_settings")
-    context_settings_from_file = (
-        context_entry if isinstance(context_entry, dict) else {}
-    )
-    cfg["context_settings"] = {
-        **dict(DEFAULT_CONTEXT_SETTINGS),
-        **context_settings_from_file,
-    }
+    cfg.pop("context_settings", None)
 
     env_key = os.environ.get("OPENAI_API_KEY")
     if env_key:
@@ -58,22 +42,6 @@ def load_config() -> Dict[str, Any]:
     env_model = os.environ.get("AI_MODEL")
     if env_model:
         cfg["model"] = env_model
-
-    env_context_limit = os.environ.get("AI_CONTEXT_READ_LIMIT")
-    if env_context_limit and env_context_limit.isdigit():
-        cfg["context_settings"]["read_limit"] = int(env_context_limit)
-
-    env_context_bytes = os.environ.get("AI_CONTEXT_MAX_BYTES")
-    if env_context_bytes and env_context_bytes.isdigit():
-        cfg["context_settings"]["max_bytes"] = int(env_context_bytes)
-
-    env_context_listing = os.environ.get("AI_CONTEXT_INCLUDE_LISTING")
-    if env_context_listing:
-        cfg["context_settings"]["include_listing"] = env_context_listing.lower() in {
-            "1",
-            "true",
-            "yes",
-        }
 
     return cfg
 
@@ -84,11 +52,20 @@ def ensure_config_dir_exists() -> Path:
     return path
 
 
+def save_config(config: Dict[str, Any]) -> Path:
+    path = ensure_config_dir_exists()
+    payload: Dict[str, Any] = {
+        "openai_api_key": config.get("openai_api_key", ""),
+        "model": config.get("model", DEFAULT_MODEL),
+    }
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
 __all__ = [
     "load_config",
     "ensure_config_dir_exists",
+    "save_config",
     "DEFAULTS",
     "DEFAULT_MODEL",
-    "DEFAULT_BASH_SETTINGS",
-    "DEFAULT_CONTEXT_SETTINGS",
 ]

@@ -292,7 +292,7 @@ class AIEngine:
         context_default_limit = int(
             context_settings.get("read_limit", DEFAULT_READ_LIMIT)
         )
-        include_listing = bool(context_settings.get("include_listing", False))
+        include_listing = False
 
         try:
             scope_root, scope_label = self._resolve_scope(scope, repo_root)
@@ -355,7 +355,6 @@ class AIEngine:
         last_user_message_payload: Optional[str] = pending_user_message
         last_user_message_index: Optional[int] = None
         instruction_stack: list[str] = []
-        hotkey_hint_shown = False
 
         while True:
             rendered_messages: set[str] = set()
@@ -408,11 +407,6 @@ class AIEngine:
 
                 try:
                     self.renderer.start_hotkey_listener()
-                    if not hotkey_hint_shown:
-                        self.renderer.display_info(
-                            "Press q to cancel the current response or r to retry it."
-                        )
-                        hotkey_hint_shown = True
                     if not self.show_reasoning:
                         self.renderer.start_loader()
                         loader_started = True
@@ -784,7 +778,6 @@ class AIEngine:
                 warned_no_write = False
                 skip_model_request = True
                 instruction_stack.clear()
-                hotkey_hint_shown = False
                 last_user_message_payload = None
                 last_user_message_index = None
                 pending_user_is_repeat = False

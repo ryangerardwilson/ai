@@ -7,7 +7,8 @@ import sys
 from pathlib import Path
 from typing import Dict, Iterable, Optional
 
-from config_loader import load_config, DEFAULT_MODEL
+from config_loader import load_config, DEFAULT_MODEL, save_config
+from config_paths import get_config_path
 from contextualizer import (
     read_file_slice,
     format_file_slice_for_prompt,
@@ -26,6 +27,7 @@ PRIMARY_FLAG_SET = {"-h", "--help", "-v", "--version", "-V", "-u", "--upgrade"}
 class Orchestrator:
     def __init__(self) -> None:
         self.config = load_config()
+        self._config_path = get_config_path()
         show_reasoning = self.config.get("show_reasoning")
         if show_reasoning is None:
             show_reasoning = self.config.get("show_thinking", True)
@@ -38,6 +40,7 @@ class Orchestrator:
             color_prefix=self._resolve_color(),
             show_reasoning=bool(show_reasoning),
         )
+        self._bootstrap_config()
         self.engine = AIEngine(
             renderer=self.renderer,
             config=self.config,
@@ -149,6 +152,93 @@ class Orchestrator:
         return self.engine.run_conversation(
             prompt_text, scope_arg, display_prompt=False
         )
+
+    # ------------------------------------------------------------------
+    # Setup helpers
+    # ------------------------------------------------------------------
+    def _bootstrap_config(self) -> None:
+        config_missing = not self._config_path.exists()
+        key_value = (self.config.get("openai_api_key") or "").strip()
+        model_value = (self.config.get("model") or "").strip()
+        initial_key = key_value
+        initial_model = model_value
+        config_changed = False
+
+        if config_missing:
+            self.renderer.display_info(
+                "Configuration file not found. Enter your OpenAI API key to set it up."
+            )
+
+        if not key_value:
+            self.renderer.display_info(
+                "OpenAI API key not found. Enter it to continue."
+            )
+
+        if config_missing or not key_value:
+            prompt_label = (
+                "OpenAI API key (press Enter to keep detected value): "
+                if key_value
+                else "OpenAI API key: "
+            )
+            while True:
+                entered = self.renderer.prompt_text(prompt_label)
+                if entered is None:
+                    self.renderer.display_error("API key input cancelled. Exiting.")
+                    sys.exit(1)
+                entered = entered.strip()
+                if entered:
+                    key_value = entered
+                    break
+                if key_value:
+                    break
+                self.renderer.display_error("API key cannot be empty. Try again.")
+
+        self.config["openai_api_key"] = key_value
+        if key_value != initial_key:
+            config_changed = True
+
+        if config_missing or not initial_model:
+            self.renderer.display_info(
+                "Default model controls which OpenAI model is used for new sessions."
+            )
+        prompt: Optional[str] = None
+        if config_missing or not initial_model:
+            if model_value:
+                prompt = (
+                    f"Default model (Enter to keep '{model_value}', default {DEFAULT_MODEL}): "
+                )
+            else:
+                prompt = f"Default model (Enter to use {DEFAULT_MODEL}): "
+        elif not model_value:
+            prompt = f"Default model (Enter to use {DEFAULT_MODEL}): "
+
+        if prompt is not None:
+            entered = self.renderer.prompt_text(prompt)
+            chosen = (entered or "").strip()
+            if chosen:
+                model_value = chosen
+            elif not model_value:
+                model_value = DEFAULT_MODEL
+
+        if not model_value:
+            model_value = DEFAULT_MODEL
+
+        if model_value != initial_model:
+            config_changed = True
+        self.config["model"] = model_value
+
+        if config_missing or config_changed:
+            try:
+                save_path = save_config(self.config)
+            except OSError as exc:
+                self.renderer.display_error(
+                    f"Failed to update config at {self._config_path}: {exc}"
+                )
+            else:
+                if config_missing:
+                    self.renderer.display_info(
+                        f"Configuration saved to {save_path}."
+                    )
 
     # ------------------------------------------------------------------
     # Flag handling

@@ -77,6 +77,8 @@ the change.
 
 - `~/.config/ai/config.json` (respecting `XDG_CONFIG_HOME`) controls runtime defaults. Example:
 
+- On first launch `ai` asks for your OpenAI API key and preferred default model (press Enter to keep `gpt-5-codex`), then writes `~/.config/ai/config.json` for you.
+
 ```json
 {
   "openai_api_key": "sk-your-key",
@@ -91,7 +93,7 @@ the change.
 - `AI_REASONING_EFFORT` tweaks how hard reasoning models think (`minimal`, `low`, `medium`, `high`, etc.); defaults to `medium` when reasoning is enabled.
 - `AI_DEBUG_API` (alias `AI_DEBUG_REASONING`) enables verbose OpenAI interaction logs; combine with the `-d` flag to capture them automatically.
 - `AI_BASH_MAX_SECONDS` and `AI_BASH_MAX_OUTPUT` tune shell command timeout and output caps.
-- `context_settings` (in config or via env vars) tune the initial context window: `{"read_limit": 2000, "max_bytes": 51200, "include_listing": false}` by default. Override with `AI_CONTEXT_READ_LIMIT`, `AI_CONTEXT_MAX_BYTES`, `AI_CONTEXT_INCLUDE_LISTING`, or edit the config directly.
+- Context window defaults (`read_limit` 2000, `max_bytes` 51200, listings disabled) are hard-coded; directory inventories never ship in the prompt.
 - Models with the `-codex` suffix (for example `gpt-5-codex`) are Responses-only per [OpenAI's docs](https://platform.openai.com/docs/models/gpt-5-codex); `ai` automatically switches the edit workflow to the Responses API when you configure one.
 
 The application stores temporary chat buffers in `/tmp/chat_history_*.txt`.
