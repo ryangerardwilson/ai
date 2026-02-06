@@ -42,6 +42,16 @@ class Orchestrator:
         if primary_rc is not None:
             return primary_rc
 
+        if len(arg_list) == 1 and arg_list[0].lower() == "v":
+            edited = self.renderer.edit_prompt()
+            if edited is None:
+                return 1
+            prompt_text = edited.strip()
+            if not prompt_text:
+                self.renderer.display_info("Prompt cancelled (empty message).")
+                return 0
+            return self.engine.run_conversation(prompt_text, None)
+
         args = self._parse_args(arg_list)
         context_defaults = self.config.get("context_settings", {})
 

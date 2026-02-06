@@ -3,7 +3,11 @@ from __future__ import annotations
 import difflib
 import os
 import re
+import shlex
+import shutil
+import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -115,17 +119,53 @@ class CLIRenderer:
         return value
 
     def prompt_follow_up(self) -> Optional[str]:
-        if self._readline:
-            self._readline_prompt = "QR > "
-        self._completion_messages.clear()
-        try:
-            return input("QR > ").strip()
-        except KeyboardInterrupt:
-            print("\nInterrupted by user.")
-            return None
-        except EOFError:
-            print()
-            return None
+        while True:
+            if self._readline:
+                self._readline_prompt = "QR > "
+            self._completion_messages.clear()
+            try:
+                raw_value = input("QR > ")
+            except KeyboardInterrupt:
+                print("\nInterrupted by user.")
+                return None
+            except EOFError:
+                print()
+                return None
+
+            trimmed = raw_value.strip()
+            stripped_leading = raw_value.lstrip()
+
+            if stripped_leading.startswith("/"):
+                command, sep, remainder = stripped_leading.partition(" ")
+                if command.lower() == "/v":
+                    seed_text = remainder if sep else ""
+                    edited = self.edit_prompt(seed_text)
+                    if edited is None:
+                        continue
+                    edited = edited.strip()
+                    if not edited:
+                        self.display_info("Prompt cancelled (empty message).")
+                        continue
+                    return edited
+
+            if stripped_leading.lower().startswith("v"):
+                command, sep, remainder = stripped_leading.partition(" ")
+                if command.lower() == "v":
+                    seed_text = remainder if sep else ""
+                    edited = self.edit_prompt(seed_text)
+                    if edited is None:
+                        continue
+                    edited = edited.strip()
+                    if not edited:
+                        self.display_info("Prompt cancelled (empty message).")
+                        continue
+                    return edited
+
+            if trimmed:
+                return trimmed
+
+            # Empty input mirrors previous behaviour: exit conversation
+            return ""
 
     def consume_completion_messages(self) -> list[str]:
         messages = self._completion_messages[:]
@@ -346,3 +386,74 @@ class CLIRenderer:
         self._loader_thread = None
         if self._supports_color:
             print("\033[?25h", end="", flush=True)
+
+    # ------------------------------------------------------------------
+    # Prompt editing helper
+    # ------------------------------------------------------------------
+    def edit_prompt(self, seed_text: str = "") -> Optional[str]:
+        return self._edit_prompt_via_editor(seed_text)
+
+    def _edit_prompt_via_editor(self, seed_text: str) -> Optional[str]:
+        candidates = [
+            os.environ.get("AI_PROMPT_EDITOR"),
+            os.environ.get("EDITOR"),
+            os.environ.get("VISUAL"),
+            "vim",
+        ]
+
+        editor_args: Optional[List[str]] = None
+        for candidate in candidates:
+            if not candidate:
+                continue
+            try:
+                parts = shlex.split(candidate)
+            except ValueError:
+                continue
+            if not parts:
+                continue
+            if shutil.which(parts[0]) is None:
+                continue
+            editor_args = parts
+            break
+
+        if editor_args is None:
+            self.display_error(
+                "No editor available for /v. Set AI_PROMPT_EDITOR or install vim."
+            )
+            return None
+
+        temp_path = ""
+        try:
+            with tempfile.NamedTemporaryFile(
+                "w+", delete=False, encoding="utf-8"
+            ) as handle:
+                temp_path = handle.name
+                if seed_text:
+                    handle.write(seed_text)
+                    if not seed_text.endswith("\n"):
+                        handle.write("\n")
+                handle.flush()
+
+            rc = subprocess.call(editor_args + [temp_path])
+            if rc != 0:
+                self.display_error(
+                    f"Editor exited with status {rc}; prompt unchanged."
+                )
+                return None
+
+            with open(temp_path, "r", encoding="utf-8") as reader:
+                return reader.read()
+        except FileNotFoundError:
+            self.display_error(
+                f"Editor '{editor_args[0] if editor_args else 'vim'}' not found."
+            )
+            return None
+        except Exception as exc:
+            self.display_error(f"Failed to launch editor: {exc}")
+            return None
+        finally:
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.unlink(temp_path)
+                except OSError:
+                    pass

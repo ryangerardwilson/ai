@@ -52,7 +52,9 @@ python main.py
 - `ai path/to/directory "summarize the services"` — scope the conversation to that directory; the assistant gathers context from the subtree before replying.
 - `ai "what is the objective of this repo"` — summarize the repository snapshot and cite relevant files.
 - `ai docs/architecture "summarize these docs"` — limit the analysis to the `docs/architecture` directory before answering.
+- `ai v` — open Vim (or `$EDITOR`) immediately to craft the first prompt before the session starts.
 - In interactive mode you can run sandboxed shell commands with `!command` (for example `!ls src`). The output is shown immediately and the transcript is attached to the conversation the next time you send a regular prompt.
+- Type `v` at the `QR >` prompt to pop open Vim (or `$EDITOR`) so you can draft the next instruction before sending it; you can add text after `v` to seed the buffer.
 - `ai --read path/to/file.py --offset 400 --limit 200` — preview a specific slice of a file (line numbers mirror the assistant’s context hints).
 - When the assistant provides file contents, the CLI shows a unified diff for each file and asks for confirmation before writing; approved files are created or updated immediately.
 - Behind the scenes the assistant uses Codex-like tools (`read_file`, `write_file`, `update_plan`, `shell`). You’ll see plan updates, command output, and diff prompts as those tools run.
