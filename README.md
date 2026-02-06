@@ -1,9 +1,17 @@
 # ai
 
-`ai` is a blunt, Codex-inspired terminal companion built on the OpenAI API.
-Launch it to analyze a repository snapshot, iterate on follow-up questions, or
-hand it a file to rewrite while keeping eyes on the diff. Everything runs from
-a single binary with explicit controls for upgrades and versioning.
+`ai` is a Vim-first rewrite of OpenAI Codex running on the latest Responses API
+superset of Completions. Launch it to analyze a repository snapshot, iterate on
+follow-up questions, or hand it a file to rewrite while keeping eyes on the
+diff. Everything runs from a single binary with explicit controls for upgrades
+and versioning.
+
+- CLI and TUI modes wrap the Responses API so you can audit diffs, chat, or edit
+  without leaving the keyboard.
+- Minimal, opinionated workflow trims noise and keeps every run focused on
+  shipping the next concrete change.
+- Git safeguards stage changes for you and refuse to auto-commit, so the AI
+  never hijacks version control.
 
 ---
 
@@ -75,16 +83,8 @@ the change.
 
 ## Configuration & Environment
 
-- `~/.config/ai/config.json` (respecting `XDG_CONFIG_HOME`) controls runtime defaults. Example:
-
-- On first launch `ai` asks for your OpenAI API key and preferred default model (press Enter to keep `gpt-5-codex`), then writes `~/.config/ai/config.json` for you.
-
-```json
-{
-  "openai_api_key": "sk-your-key",
-  "model": "gpt-5-codex"
-}
-```
+- `~/.config/ai/config.json` (respecting `XDG_CONFIG_HOME`) stores only the OpenAI API key and the default model.
+- On first launch `ai` asks for your OpenAI API key first, then prompts for the model (press Enter to keep `gpt-5-codex`) before writing the config file for you.
 
 - `OPENAI_API_KEY` overrides the `openai_api_key` entry at runtime (handy for CI or shells).
 - `AI_MODEL` overrides the single `model` value.
