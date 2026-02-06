@@ -20,6 +20,8 @@ from contextualizer import (
 )
 from bash_executor import CommandRejected, format_command_result, run_sandboxed_bash
 
+NEW_CONVERSATION_TOKEN = "<<NEW_CONVERSATION>>"
+
 
 TOOL_DEFINITIONS = [
     {
@@ -690,6 +692,19 @@ class AIEngine:
             if follow_up is None:
                 return 0
             follow_up = follow_up.strip()
+            if follow_up == NEW_CONVERSATION_TOKEN:
+                self._api_debug("conversation reset requested")
+                conversation_items.clear()
+                pending_reasoning_queue.clear()
+                assistant_messages.clear()
+                buffered_shell_messages.clear()
+                plan_state["plan"] = None
+                latest_instruction = ""
+                pending_user_message = None
+                pending_context_update = prompt_context
+                warned_no_write = False
+                skip_model_request = True
+                continue
             if not follow_up:
                 return 0
 

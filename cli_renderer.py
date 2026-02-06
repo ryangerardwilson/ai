@@ -28,6 +28,7 @@ class CLIRenderer:
     ANSI_DARKER_GRAY = "\033[38;5;240m"
     ANSI_REASONING = "\033[38;5;242m"
     ANSI_RESET = "\033[0m"
+    NEW_CONVERSATION_TOKEN = "<<NEW_CONVERSATION>>"
 
     def __init__(
         self, *, color_prefix: str = "\033[1;36m", show_reasoning: bool = True
@@ -166,19 +167,6 @@ class CLIRenderer:
             trimmed = raw_value.strip()
             stripped_leading = raw_value.lstrip()
 
-            if stripped_leading.startswith("/"):
-                command, sep, remainder = stripped_leading.partition(" ")
-                if command.lower() == "/v":
-                    seed_text = remainder if sep else ""
-                    edited = self.edit_prompt(seed_text)
-                    if edited is None:
-                        continue
-                    edited = edited.strip()
-                    if not edited:
-                        self.display_info("Prompt cancelled (empty message).")
-                        continue
-                    return edited
-
             if stripped_leading.lower().startswith("v"):
                 command, sep, remainder = stripped_leading.partition(" ")
                 if command.lower() == "v":
@@ -193,7 +181,8 @@ class CLIRenderer:
                     return edited
 
             if trimmed:
-                if trimmed.lower() == "help":
+                command_lower = trimmed.lower()
+                if command_lower == "help":
                     self.display_info(
                         "# Help\n"
                         "- Enter a question or instruction to continue the conversation.\n"
@@ -201,6 +190,9 @@ class CLIRenderer:
                         "- Use `/v` or `v` to draft the next prompt in Vim."
                     )
                     continue
+                if command_lower == "new":
+                    self.display_info("Context reset.")
+                    return self.NEW_CONVERSATION_TOKEN
                 self._suppress_next_user_prompt = True
                 return trimmed
 
