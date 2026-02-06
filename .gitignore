@@ -1,4 +1,6 @@
 **/__pycache__/*
 *.swp
 *.log
+.ruff_cache
+.pytest_cache
 opencode
