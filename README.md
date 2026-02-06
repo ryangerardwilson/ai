@@ -55,7 +55,8 @@ python main.py
 - `ai v` — open Vim (or `$EDITOR`) immediately to craft the first prompt before the session starts.
 - In interactive mode you can run sandboxed shell commands with `!command` (for example `!ls src`). The output is shown immediately and the transcript is attached to the conversation the next time you send a regular prompt.
 - Type `v` at the `💬 >` prompt to pop open Vim (or `$EDITOR`) so you can draft the next instruction before sending it; you can add text after `v` to seed the buffer.
-- When supported by the model, `ai` streams the agent’s reasoning as a dim `🤔` line while it thinks; set `AI_SHOW_REASONING=0` (legacy `AI_SHOW_THINKING=0`) to suppress it.
+- Type `help` for an inline cheat sheet or `new` to reset the current conversation context without exiting.
+- When supported by the model, `ai` streams the agent’s reasoning as a dim `🤖` line while it thinks; set `AI_SHOW_REASONING=0` (legacy `AI_SHOW_THINKING=0`) to suppress it.
 - `ai --read path/to/file.py --offset 400 --limit 200` — preview a specific slice of a file (line numbers mirror the assistant’s context hints).
 - `ai -d` — enable verbose OpenAI debug logs (writes to `debug.log` by default, or supply a path like `ai -d logs/session.log "prompt"`).
 - When the assistant provides file contents, the CLI shows a unified diff for each file and asks for confirmation before writing; approved files are created or updated immediately.
