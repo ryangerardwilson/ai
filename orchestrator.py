@@ -204,9 +204,7 @@ class Orchestrator:
         prompt: Optional[str] = None
         if config_missing or not initial_model:
             if model_value:
-                prompt = (
-                    f"Default model (Enter to keep '{model_value}', default {DEFAULT_MODEL}): "
-                )
+                prompt = f"Default model (Enter to keep '{model_value}', default {DEFAULT_MODEL}): "
             else:
                 prompt = f"Default model (Enter to use {DEFAULT_MODEL}): "
         elif not model_value:
@@ -236,9 +234,7 @@ class Orchestrator:
                 )
             else:
                 if config_missing:
-                    self.renderer.display_info(
-                        f"Configuration saved to {save_path}."
-                    )
+                    self.renderer.display_info(f"Configuration saved to {save_path}.")
 
     # ------------------------------------------------------------------
     # Flag handling

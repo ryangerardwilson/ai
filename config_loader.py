@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 from config_paths import get_config_path
+
 DEFAULT_MODEL = "gpt-5-codex"
 
 DEFAULTS: Dict[str, Any] = {
