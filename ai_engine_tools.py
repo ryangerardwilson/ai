@@ -123,6 +123,31 @@ TOOL_DEFINITIONS = [
             "required": ["plan"],
         },
     },
+    {
+        "type": "function",
+        "name": "unit_test_coverage",
+        "description": "Run Python pytest with coverage (term-missing report) and return the formatted output.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "target": {
+                    "type": "string",
+                    "description": "Optional test target path or pattern",
+                },
+                "extraArgs": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Additional pytest arguments",
+                },
+                "timeout_ms": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Optional timeout in milliseconds",
+                },
+            },
+            "required": [],
+        },
+    },
 ]
 
 
@@ -350,6 +375,9 @@ def handle_tool_call(
         runtime.debug("tool_result name=update_plan mutated=False")
         return response, False
 
+    if tool_name == "unit_test_coverage":
+        return run_unit_test_coverage(args, runtime)
+
     return f"error: unknown tool '{tool_name}'", False
 
 
@@ -491,6 +519,69 @@ def handle_shell_command(
         return message, False
 
 
+def run_unit_test_coverage(
+    args: Dict[str, Any], runtime: ToolRuntime
+) -> tuple[str, bool]:
+    target = args.get("target")
+    if target is not None and not isinstance(target, str):
+        return "error: target must be a string", False
+
+    extra_args = args.get("extraArgs")
+    if extra_args is None:
+        extra_args = args.get("extra_args")
+    if extra_args is not None:
+        if not isinstance(extra_args, list) or not all(
+            isinstance(item, str) for item in extra_args
+        ):
+            return "error: extraArgs must be a list of strings", False
+
+    command_parts = ["pytest", "--cov", "--cov-report=term-missing"]
+    if target:
+        cleaned_target = target.strip()
+        if cleaned_target:
+            command_parts.append(cleaned_target)
+
+    if extra_args:
+        command_parts.extend(extra_args)
+
+    command_str = " ".join(shlex.quote(part) for part in command_parts)
+
+    timeout_ms = args.get("timeout_ms")
+    timeout_seconds = 120
+    if timeout_ms is not None:
+        try:
+            timeout_seconds = max(1, int(timeout_ms) // 1000)
+        except Exception:
+            return "error: invalid timeout_ms", False
+
+    try:
+        result = run_sandboxed_bash(
+            command_str,
+            cwd=runtime.default_root,
+            scope_root=runtime.base_root,
+            timeout=timeout_seconds,
+            max_output_bytes=50000,
+        )
+    except CommandRejected as exc:
+        message = f"command rejected: {exc}"
+        runtime.renderer.display_error(message)
+        return message, False
+    except Exception as exc:
+        message = f"error: failed to run pytest coverage: {exc}"
+        runtime.renderer.display_error(message)
+        return message, False
+
+    formatted = format_command_result(result)
+    rendered_parts = [f"$ {command_str}"]
+    if formatted.strip():
+        rendered_parts.append(formatted)
+    else:
+        rendered_parts.append("(no output)")
+    rendered = "\n\n".join(rendered_parts)
+    runtime.renderer.display_shell_output(rendered)
+    return rendered, False
+
+
 __all__ = [
     "RendererProtocol",
     "TOOL_DEFINITIONS",
@@ -501,5 +592,6 @@ __all__ = [
     "handle_shell_command",
     "handle_tool_call",
     "instruction_implies_write",
+    "run_unit_test_coverage",
     "parse_arguments",
 ]
