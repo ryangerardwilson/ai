@@ -126,6 +126,58 @@ TOOL_DEFINITIONS = [
     },
     {
         "type": "function",
+        "name": "plan_update",
+        "description": "Maintain a structured task plan. Provide the full current list of todos with statuses and priorities.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "todos": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {
+                                "type": "string",
+                                "description": "Stable identifier for the task",
+                            },
+                            "content": {
+                                "type": "string",
+                                "description": "Task description",
+                            },
+                            "status": {
+                                "type": "string",
+                                "enum": [
+                                    "pending",
+                                    "in_progress",
+                                    "completed",
+                                    "cancelled",
+                                ],
+                                "description": "Current task status",
+                            },
+                            "priority": {
+                                "type": "string",
+                                "enum": ["low", "medium", "high"],
+                                "description": "Optional priority label",
+                            },
+                        },
+                        "required": ["id", "content", "status"],
+                    },
+                    "description": "Full list of current todos",
+                },
+                "summary": {
+                    "type": "string",
+                    "description": "Optional plan summary or notes",
+                },
+                "replace": {
+                    "type": "boolean",
+                    "description": "When false, merge todos by id instead of replacing the whole list",
+                },
+            },
+            "required": ["todos"],
+        },
+    },
+    {
+        "type": "function",
         "name": "unit_test_coverage",
         "description": "Run Python pytest with coverage (term-missing report) and return the formatted output.",
         "parameters": {
@@ -446,6 +498,9 @@ def handle_tool_call(
 
     if tool_name == "search_content":
         return run_search_content(args, runtime)
+
+    if tool_name == "plan_update":
+        return run_plan_update(args, runtime)
 
     return f"error: unknown tool '{tool_name}'", False
 
@@ -973,6 +1028,127 @@ def run_search_content(
     return rendered, False
 
 
+def run_plan_update(args: Dict[str, Any], runtime: ToolRuntime) -> tuple[str, bool]:
+    todos_payload = args.get("todos")
+    if not isinstance(todos_payload, list):
+        return "error: todos must be a list", False
+
+    allowed_status = {"pending", "in_progress", "completed", "cancelled"}
+    allowed_priority = {"low", "medium", "high"}
+
+    normalized: List[Dict[str, Any]] = []
+    seen_ids: set[str] = set()
+
+    for index, item in enumerate(todos_payload, start=1):
+        if not isinstance(item, dict):
+            return f"error: todo #{index} must be an object", False
+
+        todo_id_raw = item.get("id")
+        if not isinstance(todo_id_raw, str) or not todo_id_raw.strip():
+            return f"error: todo #{index} missing id", False
+        todo_id = todo_id_raw.strip()
+        if todo_id in seen_ids:
+            return f"error: duplicate todo id '{todo_id}'", False
+        seen_ids.add(todo_id)
+
+        content_raw = item.get("content")
+        if not isinstance(content_raw, str) or not content_raw.strip():
+            return f"error: todo '{todo_id}' missing content", False
+        content = content_raw.strip()
+
+        status_raw = item.get("status")
+        if not isinstance(status_raw, str) or status_raw not in allowed_status:
+            return f"error: todo '{todo_id}' has invalid status", False
+        status = status_raw
+
+        priority_raw = item.get("priority")
+        if priority_raw is not None:
+            if not isinstance(priority_raw, str) or priority_raw not in allowed_priority:
+                return f"error: todo '{todo_id}' has invalid priority", False
+            priority = priority_raw
+        else:
+            priority = None
+
+        normalized.append(
+            {
+                "id": todo_id,
+                "content": content,
+                "status": status,
+                "priority": priority,
+            }
+        )
+
+    replace_flag = args.get("replace")
+    if replace_flag is None:
+        replace = True
+    elif isinstance(replace_flag, bool):
+        replace = replace_flag
+    else:
+        return "error: replace must be a boolean", False
+
+    existing_list: List[Dict[str, Any]] = runtime.plan_state.get("todos", []) or []
+    final_list: List[Dict[str, Any]]
+
+    if replace or not existing_list:
+        final_list = normalized
+    else:
+        existing_map = {todo["id"]: dict(todo) for todo in existing_list}
+        incoming_map = {todo["id"]: todo for todo in normalized}
+        final_list = []
+
+        for todo in existing_list:
+            todo_id = todo["id"]
+            if todo_id in incoming_map:
+                final_list.append(incoming_map[todo_id])
+            else:
+                final_list.append(todo)
+
+        for todo in normalized:
+            if todo["id"] not in existing_map:
+                final_list.append(todo)
+
+    runtime.plan_state["todos"] = final_list
+
+    summary_raw = args.get("summary")
+    summary = summary_raw.strip() if isinstance(summary_raw, str) and summary_raw.strip() else None
+    if summary is not None:
+        runtime.plan_state["summary"] = summary
+    elif "summary" in runtime.plan_state and replace:
+        # Allow clearing summary when replace=True and summary omitted
+        runtime.plan_state.pop("summary", None)
+
+    symbol_for_status = {
+        "pending": "[ ]",
+        "in_progress": "[~]",
+        "completed": "[x]",
+        "cancelled": "[-]",
+    }
+
+    lines: List[str] = []
+    counts = {key: 0 for key in symbol_for_status}
+    for todo in final_list:
+        status = todo["status"]
+        counts[status] += 1
+        symbol = symbol_for_status.get(status, "[ ]")
+        priority = todo["priority"]
+        priority_label = f" ({priority})" if priority else ""
+        lines.append(f"{symbol} {todo['content']}{priority_label} (id: {todo['id']})")
+
+    plan_text = "\n".join(lines) if lines else "(no tasks)"
+    runtime.renderer.display_plan_update(plan_text, summary)
+
+    total = len(final_list)
+    parts = [f"{total} task{'s' if total != 1 else ''}"]
+    for key in ("completed", "in_progress", "pending", "cancelled"):
+        value = counts[key]
+        if value:
+            label = key.replace("_", " ")
+            parts.append(f"{value} {label}")
+    response = "plan updated: " + ", ".join(parts)
+    runtime.debug("tool_result name=plan_update mutated=False")
+    return response, False
+
+
 __all__ = [
     "RendererProtocol",
     "TOOL_DEFINITIONS",
@@ -986,5 +1162,6 @@ __all__ = [
     "run_unit_test_coverage",
     "run_glob_search",
     "run_search_content",
+    "run_plan_update",
     "parse_arguments",
 ]

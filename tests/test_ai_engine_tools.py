@@ -15,6 +15,7 @@ class DummyRenderer:
         self.shell_outputs: list[str] = []
         self.errors: list[str] = []
         self.infos: list[str] = []
+        self.plan_updates: list[tuple[str, str | None]] = []
 
     def display_shell_output(self, text: str) -> None:  # type: ignore[override]
         self.shell_outputs.append(text)
@@ -34,8 +35,8 @@ class DummyRenderer:
     def display_reasoning(self, text: str) -> None:  # pragma: no cover
         pass
 
-    def display_plan_update(self, plan: str, explanation: str | None) -> None:  # pragma: no cover
-        pass
+    def display_plan_update(self, plan: str, explanation: str | None) -> None:  # type: ignore[override]
+        self.plan_updates.append((plan, explanation))
 
     def review_file_update(self, *args, **kwargs):  # pragma: no cover
         return "no_change"
@@ -268,3 +269,79 @@ def test_search_content_no_matches(monkeypatch, tmp_path: Path):
 
     assert mutated is False
     assert message.startswith("Search pattern 'missing' returned no matches")
+
+
+def test_plan_update_replace_sets_plan():
+    renderer = DummyRenderer()
+    runtime = make_runtime(renderer)
+
+    message, mutated = ai_engine_tools.run_plan_update(
+        {
+            "todos": [
+                {
+                    "id": "t1",
+                    "content": "Set up project",
+                    "status": "pending",
+                    "priority": "high",
+                }
+            ],
+            "summary": "Initial setup",
+        },
+        runtime,
+    )
+
+    assert mutated is False
+    assert "1 task" in message
+    assert runtime.plan_state["todos"][0]["id"] == "t1"
+    assert renderer.plan_updates
+    plan_text, summary = renderer.plan_updates[-1]
+    assert "Set up project" in plan_text
+    assert summary == "Initial setup"
+
+
+def test_plan_update_merge_when_replace_false():
+    renderer = DummyRenderer()
+    runtime = make_runtime(renderer)
+
+    ai_engine_tools.run_plan_update(
+        {
+            "todos": [
+                {"id": "a", "content": "Task A", "status": "pending"},
+                {"id": "b", "content": "Task B", "status": "pending"},
+            ]
+        },
+        runtime,
+    )
+
+    message, _ = ai_engine_tools.run_plan_update(
+        {
+            "todos": [
+                {"id": "b", "content": "Task B updated", "status": "in_progress"},
+                {"id": "c", "content": "Task C", "status": "pending"},
+            ],
+            "replace": False,
+        },
+        runtime,
+    )
+
+    todos = runtime.plan_state["todos"]
+    assert [todo["id"] for todo in todos] == ["a", "b", "c"]
+    assert todos[1]["status"] == "in_progress"
+    assert "3 tasks" in message
+
+
+def test_plan_update_validates_status():
+    renderer = DummyRenderer()
+    runtime = make_runtime(renderer)
+
+    message, mutated = ai_engine_tools.run_plan_update(
+        {
+            "todos": [
+                {"id": "oops", "content": "Bad", "status": "done"},
+            ]
+        },
+        runtime,
+    )
+
+    assert mutated is False
+    assert message.startswith("error: todo 'oops' has invalid status")

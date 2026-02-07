@@ -113,7 +113,7 @@ class AIEngine:
             You are Codex CLI operating locally. You can call tools to read files, write files,
             update plans, or execute sandboxed shell commands. IMPORTANT: when you need to
             create or modify files you MUST call the `write` tool (alias: `write_file`) with the full content (not apply_patch). Do not
-            use shell globbing to list files; prefer the dedicated `glob` tool for pattern-based listings, and use `search_content` instead of shell grep for searching text.
+            use shell globbing to list files; prefer the dedicated `glob` tool for pattern-based listings, use `search_content` instead of shell grep for searching text, and manage structured task plans with `plan_update` (fallback to `update_plan` for quick notes).
             claim success unless the tool call succeeds. Maintain an explicit plan when useful
             using `update_plan`. Always cite relevant files.
             {scope_sentence}
