@@ -148,6 +148,30 @@ TOOL_DEFINITIONS = [
             "required": [],
         },
     },
+    {
+        "type": "function",
+        "name": "glob",
+        "description": "List repository paths matching a glob pattern (relative to the project root unless cwd provided).",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "pattern": {
+                    "type": "string",
+                    "description": "Glob pattern (e.g., **/*.py)",
+                },
+                "cwd": {
+                    "type": "string",
+                    "description": "Optional directory to treat as current working directory",
+                },
+                "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Maximum number of matches to return (default 200)",
+                },
+            },
+            "required": ["pattern"],
+        },
+    },
 ]
 
 
@@ -378,6 +402,9 @@ def handle_tool_call(
     if tool_name == "unit_test_coverage":
         return run_unit_test_coverage(args, runtime)
 
+    if tool_name == "glob":
+        return run_glob_search(args, runtime)
+
     return f"error: unknown tool '{tool_name}'", False
 
 
@@ -582,6 +609,71 @@ def run_unit_test_coverage(
     return rendered, False
 
 
+def run_glob_search(args: Dict[str, Any], runtime: ToolRuntime) -> tuple[str, bool]:
+    pattern = args.get("pattern")
+    if not isinstance(pattern, str) or not pattern.strip():
+        return "error: pattern must be a non-empty string", False
+    pattern_str = pattern.strip()
+
+    limit_value = args.get("limit")
+    if limit_value is None:
+        limit = 200
+    else:
+        try:
+            limit = int(limit_value)
+        except (TypeError, ValueError):
+            return "error: limit must be an integer", False
+        if limit < 1:
+            return "error: limit must be at least 1", False
+        if limit > 1000:
+            limit = 1000
+
+    cwd_arg = args.get("cwd")
+    if cwd_arg is not None:
+        if not isinstance(cwd_arg, str) or not cwd_arg.strip():
+            return "error: cwd must be a non-empty string", False
+        cwd_path = Path(cwd_arg).expanduser()
+        if not cwd_path.is_absolute():
+            cwd_path = (runtime.default_root / cwd_path).resolve()
+        else:
+            cwd_path = cwd_path.resolve()
+        try:
+            cwd_path.relative_to(runtime.base_root)
+        except ValueError:
+            return f"error: cwd outside project root ({cwd_path})", False
+        search_root = cwd_path
+    else:
+        search_root = runtime.default_root
+
+    if not search_root.exists():
+        return f"error: cwd does not exist ({search_root})", False
+
+    matches: List[Path] = []
+    for candidate in search_root.glob(pattern_str):
+        candidate_path = candidate.resolve()
+        try:
+            candidate_path.relative_to(runtime.base_root)
+        except ValueError:
+            continue
+        matches.append(candidate_path)
+        if len(matches) >= limit:
+            break
+
+    if not matches:
+        message = f"Glob pattern '{pattern_str}' returned no matches."
+        runtime.renderer.display_info(message)
+        return message, False
+
+    relative_matches = [
+        str(path.relative_to(runtime.base_root))
+        for path in matches
+    ]
+    header = f"Glob matches for '{pattern_str}' (showing {len(relative_matches)}):"
+    rendered = "\n".join([header, *relative_matches])
+    runtime.renderer.display_info(rendered)
+    return rendered, False
+
+
 __all__ = [
     "RendererProtocol",
     "TOOL_DEFINITIONS",
@@ -593,5 +685,6 @@ __all__ = [
     "handle_tool_call",
     "instruction_implies_write",
     "run_unit_test_coverage",
+    "run_glob_search",
     "parse_arguments",
 ]

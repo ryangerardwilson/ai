@@ -12,12 +12,13 @@ class DummyRenderer:
     def __init__(self) -> None:
         self.shell_outputs: list[str] = []
         self.errors: list[str] = []
+        self.infos: list[str] = []
 
     def display_shell_output(self, text: str) -> None:  # type: ignore[override]
         self.shell_outputs.append(text)
 
-    def display_info(self, text: str) -> None:  # pragma: no cover
-        pass
+    def display_info(self, text: str) -> None:  # type: ignore[override]
+        self.infos.append(text)
 
     def display_error(self, text: str) -> None:  # type: ignore[override]
         self.errors.append(text)
@@ -88,8 +89,10 @@ class DummyRenderer:
         return None
 
 
-def make_runtime(renderer: DummyRenderer) -> ai_engine_tools.ToolRuntime:
-    repo_root = Path("/repo")
+def make_runtime(
+    renderer: DummyRenderer, *, root: Path | None = None
+) -> ai_engine_tools.ToolRuntime:
+    repo_root = (root or Path("/repo")).resolve()
     return ai_engine_tools.ToolRuntime(
         renderer=renderer,
         base_root=repo_root,
@@ -141,3 +144,48 @@ def test_unit_test_coverage_validates_extra_args():
 
     assert mutated is False
     assert message == "error: extraArgs must be a list of strings"
+
+
+def test_glob_search_lists_matches(tmp_path: Path):
+    renderer = DummyRenderer()
+    root = tmp_path
+    (root / "src").mkdir()
+    (root / "src" / "main.py").write_text("print('hi')")
+    (root / "README.md").write_text("readme")
+
+    runtime = make_runtime(renderer, root=root)
+
+    output, mutated = ai_engine_tools.run_glob_search({"pattern": "**/*.py"}, runtime)
+
+    assert mutated is False
+    assert "src/main.py" in output
+    assert renderer.infos and "src/main.py" in renderer.infos[-1]
+
+
+def test_glob_search_respects_limit(tmp_path: Path):
+    renderer = DummyRenderer()
+    root = tmp_path
+    for index in range(3):
+        (root / f"file{index}.txt").write_text("data")
+
+    runtime = make_runtime(renderer, root=root)
+
+    output, _ = ai_engine_tools.run_glob_search(
+        {"pattern": "*.txt", "limit": 1}, runtime
+    )
+
+    lines = output.splitlines()
+    assert len(lines) == 2
+
+
+def test_glob_search_rejects_outside_cwd(tmp_path: Path):
+    renderer = DummyRenderer()
+    runtime = make_runtime(renderer, root=tmp_path)
+
+    outside = tmp_path.parent
+    message, mutated = ai_engine_tools.run_glob_search(
+        {"pattern": "*", "cwd": str(outside)}, runtime
+    )
+
+    assert mutated is False
+    assert message.startswith("error: cwd outside project root")
