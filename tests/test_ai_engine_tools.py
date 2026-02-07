@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 import ai_engine_tools
+from bash_executor import CommandResult
 
 
 class DummyRenderer:
@@ -189,3 +191,80 @@ def test_glob_search_rejects_outside_cwd(tmp_path: Path):
 
     assert mutated is False
     assert message.startswith("error: cwd outside project root")
+
+
+def test_search_content_uses_rg(monkeypatch, tmp_path: Path):
+    renderer = DummyRenderer()
+    runtime = make_runtime(renderer, root=tmp_path)
+    target = tmp_path / "app.py"
+    target.write_text("value = 42\n")
+
+    payload = {
+        "type": "match",
+        "data": {
+            "path": {"text": "app.py"},
+            "lines": {"text": "value = 42\n"},
+            "line_number": 1,
+        },
+    }
+
+    result = CommandResult(
+        command="rg",
+        exit_code=0,
+        stdout=json.dumps(payload) + "\n",
+        stderr="",
+        truncated=False,
+    )
+
+    monkeypatch.setattr(ai_engine_tools, "run_sandboxed_bash", lambda *a, **k: result)
+
+    output, mutated = ai_engine_tools.run_search_content({"pattern": "value"}, runtime)
+
+    assert mutated is False
+    assert "app.py:1" in output
+    assert renderer.infos and "app.py:1" in renderer.infos[-1]
+
+
+def test_search_content_falls_back_without_rg(monkeypatch, tmp_path: Path):
+    renderer = DummyRenderer()
+    runtime = make_runtime(renderer, root=tmp_path)
+    target = tmp_path / "src"
+    target.mkdir()
+    file_path = target / "module.py"
+    file_path.write_text("def call():\n    pass\n")
+
+    def fake_run(*args, **kwargs):
+        raise ai_engine_tools.CommandRejected("not allowed")
+
+    monkeypatch.setattr(ai_engine_tools, "run_sandboxed_bash", fake_run)
+
+    output, mutated = ai_engine_tools.run_search_content(
+        {"pattern": "def", "include": "**/*.py"}, runtime
+    )
+
+    assert mutated is False
+    assert "module.py:1" in output
+    # final info line should contain match
+    assert renderer.infos
+    assert any("module.py:1" in info for info in renderer.infos)
+
+
+def test_search_content_no_matches(monkeypatch, tmp_path: Path):
+    renderer = DummyRenderer()
+    runtime = make_runtime(renderer, root=tmp_path)
+    (tmp_path / "sample.txt").write_text("nothing to see\n")
+
+    result = CommandResult(
+        command="rg",
+        exit_code=1,
+        stdout="",
+        stderr="",
+        truncated=False,
+    )
+
+    monkeypatch.setattr(ai_engine_tools, "run_sandboxed_bash", lambda *a, **k: result)
+
+    message, mutated = ai_engine_tools.run_search_content({"pattern": "missing"}, runtime)
+
+    assert mutated is False
+    assert message.startswith("Search pattern 'missing' returned no matches")

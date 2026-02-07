@@ -5,6 +5,7 @@ import os
 import re
 import shlex
 import subprocess
+import fnmatch
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Protocol, TextIO
@@ -167,6 +168,44 @@ TOOL_DEFINITIONS = [
                     "type": "integer",
                     "minimum": 1,
                     "description": "Maximum number of matches to return (default 200)",
+                },
+            },
+            "required": ["pattern"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "search_content",
+        "description": "Search file contents using a regex (prefer this over shell grep). Returns path:line:text snippets.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "pattern": {
+                    "type": "string",
+                    "description": "Regular expression to search for",
+                },
+                "cwd": {
+                    "type": "string",
+                    "description": "Optional directory within the repo to search",
+                },
+                "include": {
+                    "type": ["string", "array"],
+                    "items": {"type": "string"},
+                    "description": "Glob pattern(s) to include",
+                },
+                "exclude": {
+                    "type": ["string", "array"],
+                    "items": {"type": "string"},
+                    "description": "Glob pattern(s) to exclude",
+                },
+                "maxResults": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Maximum number of matches to return (default 200)",
+                },
+                "caseSensitive": {
+                    "type": "boolean",
+                    "description": "Set false for case-insensitive search",
                 },
             },
             "required": ["pattern"],
@@ -404,6 +443,9 @@ def handle_tool_call(
 
     if tool_name == "glob":
         return run_glob_search(args, runtime)
+
+    if tool_name == "search_content":
+        return run_search_content(args, runtime)
 
     return f"error: unknown tool '{tool_name}'", False
 
@@ -674,6 +716,263 @@ def run_glob_search(args: Dict[str, Any], runtime: ToolRuntime) -> tuple[str, bo
     return rendered, False
 
 
+def run_search_content(
+    args: Dict[str, Any], runtime: ToolRuntime
+) -> tuple[str, bool]:
+    pattern_raw = args.get("pattern")
+    if not isinstance(pattern_raw, str) or not pattern_raw.strip():
+        return "error: pattern must be a non-empty string", False
+    pattern = pattern_raw.strip()
+
+    case_sensitive = args.get("caseSensitive")
+    if case_sensitive is None:
+        case_sensitive_flag = True
+    elif isinstance(case_sensitive, bool):
+        case_sensitive_flag = case_sensitive
+    else:
+        return "error: caseSensitive must be a boolean", False
+
+    max_results_arg = args.get("maxResults")
+    if max_results_arg is None:
+        max_results = 200
+    else:
+        try:
+            max_results = int(max_results_arg)
+        except (TypeError, ValueError):
+            return "error: maxResults must be an integer", False
+        if max_results < 1:
+            return "error: maxResults must be at least 1", False
+        if max_results > 1000:
+            max_results = 1000
+
+    def _normalize_patterns(value: Any, key: str) -> tuple[List[str], Optional[str]]:
+        if value is None:
+            return [], None
+        if isinstance(value, str):
+            patterns = [value]
+        elif isinstance(value, list) and all(isinstance(item, str) for item in value):
+            patterns = list(value)
+        else:
+            return [], f"error: {key} must be a string or list of strings"
+        normalized = [item.strip() for item in patterns if item and item.strip()]
+        return normalized, None
+
+    include_patterns, include_error = _normalize_patterns(args.get("include"), "include")
+    if include_error:
+        return include_error, False
+
+    exclude_patterns, exclude_error = _normalize_patterns(args.get("exclude"), "exclude")
+    if exclude_error:
+        return exclude_error, False
+
+    cwd_arg = args.get("cwd")
+    if cwd_arg is not None:
+        if not isinstance(cwd_arg, str) or not cwd_arg.strip():
+            return "error: cwd must be a non-empty string", False
+        cwd_path = Path(cwd_arg).expanduser()
+        if not cwd_path.is_absolute():
+            search_root = (runtime.default_root / cwd_path).resolve()
+        else:
+            search_root = cwd_path.resolve()
+        try:
+            search_root.relative_to(runtime.base_root)
+        except ValueError:
+            return f"error: cwd outside project root ({search_root})", False
+    else:
+        search_root = runtime.default_root
+
+    if not search_root.exists():
+        return f"error: cwd does not exist ({search_root})", False
+
+    matches: List[Dict[str, Any]] = []
+    truncated = False
+
+    rg_used = False
+    command_result = None
+    command_error: Optional[str] = None
+
+    command_parts: List[str] = [
+        "rg",
+        "--json",
+        "--line-number",
+        "--color",
+        "never",
+    ]
+    if not case_sensitive_flag:
+        command_parts.append("-i")
+    for pattern_text in include_patterns:
+        command_parts.extend(["-g", pattern_text])
+    for pattern_text in exclude_patterns:
+        command_parts.extend(["-g", f"!{pattern_text}"])
+    command_parts.extend(["-m", str(max_results)])
+    command_parts.append(pattern)
+    command_parts.append(".")
+
+    command_str = " ".join(shlex.quote(part) for part in command_parts)
+
+    try:
+        command_result = run_sandboxed_bash(
+            command_str,
+            cwd=search_root,
+            scope_root=runtime.base_root,
+            timeout=30,
+            max_output_bytes=60000,
+        )
+        rg_used = True
+    except CommandRejected:
+        command_result = None
+    except Exception as exc:  # pragma: no cover - defensive
+        command_result = None
+        command_error = f"rg invocation failed: {exc}"
+
+    if command_result is not None:
+        if command_result.exit_code in {0, 1}:  # 1 means no matches
+            stdout = command_result.stdout.strip()
+            if stdout:
+                for line in stdout.splitlines():
+                    try:
+                        payload = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if payload.get("type") != "match":
+                        continue
+                    data = payload.get("data", {})
+                    path_text = (
+                        data.get("path", {}).get("text")
+                        if isinstance(data.get("path"), dict)
+                        else None
+                    )
+                    if not path_text:
+                        continue
+                    path_obj = (search_root / path_text).resolve()
+                    try:
+                        relative = path_obj.relative_to(runtime.base_root)
+                    except ValueError:
+                        continue
+                    line_number = data.get("line_number")
+                    if not isinstance(line_number, int):
+                        continue
+                    line_text = (
+                        data.get("lines", {}).get("text")
+                        if isinstance(data.get("lines"), dict)
+                        else ""
+                    )
+                    line_text = (line_text or "").rstrip("\n")
+                    matches.append(
+                        {
+                            "path": str(relative),
+                            "line": line_number,
+                            "text": line_text,
+                        }
+                    )
+                    if len(matches) >= max_results:
+                        truncated = True
+                        break
+            if matches:
+                pass
+            elif command_result.exit_code == 1:
+                message = (
+                    f"Search pattern '{pattern}' returned no matches in {search_root.relative_to(runtime.base_root)}"
+                    if search_root != runtime.base_root
+                    else f"Search pattern '{pattern}' returned no matches."
+                )
+                runtime.renderer.display_info(message)
+                return message, False
+        else:
+            command_error = command_result.stderr.strip() or command_result.stdout.strip()
+
+    if not matches and command_error:
+        runtime.renderer.display_info(
+            "rg unavailable or failed; falling back to Python search"
+        )
+
+    if not matches and not command_error and command_result is not None and rg_used:
+        # rg ran successfully but produced no matches (already handled) or stdout empty
+        if command_result.exit_code == 0:
+            message = (
+                f"Search pattern '{pattern}' returned no matches."
+            )
+            runtime.renderer.display_info(message)
+            return message, False
+
+    if not matches:
+        # fallback search in Python when rg failed or produced nothing with error
+        flags = re.MULTILINE
+        if not case_sensitive_flag:
+            flags |= re.IGNORECASE
+        try:
+            compiled = re.compile(pattern, flags)
+        except re.error as exc:
+            return f"error: invalid regex ({exc})", False
+
+        def within_patterns(path_str: str) -> bool:
+            if include_patterns and not any(
+                fnmatch.fnmatch(path_str, pat) for pat in include_patterns
+            ):
+                return False
+            if exclude_patterns and any(
+                fnmatch.fnmatch(path_str, pat) for pat in exclude_patterns
+            ):
+                return False
+            return True
+
+        for file_path in search_root.rglob("*"):
+            if not file_path.is_file():
+                continue
+            try:
+                relative = file_path.relative_to(runtime.base_root)
+            except ValueError:
+                continue
+            relative_str = str(relative)
+            if not within_patterns(relative_str):
+                continue
+            try:
+                with file_path.open("r", encoding="utf-8", errors="ignore") as handle:
+                    for line_number, line in enumerate(handle, start=1):
+                        if compiled.search(line):
+                            matches.append(
+                                {
+                                    "path": relative_str,
+                                    "line": line_number,
+                                    "text": line.rstrip("\n"),
+                                }
+                            )
+                            if len(matches) >= max_results:
+                                truncated = True
+                                break
+                if len(matches) >= max_results:
+                    break
+            except OSError:
+                continue
+
+        if not matches:
+            message = (
+                f"Search pattern '{pattern}' returned no matches."
+            )
+            runtime.renderer.display_info(message)
+            return message, False
+
+    if len(matches) > max_results:
+        matches = matches[:max_results]
+        truncated = True
+
+    match_count = len(matches)
+    count_label = "match" if match_count == 1 else "matches"
+    header = f"Search results for '{pattern}' – {match_count} {count_label}"
+    if truncated:
+        header += f" (truncated at {max_results})"
+    if search_root != runtime.base_root:
+        header += f" in {search_root.relative_to(runtime.base_root)}"
+
+    lines = [header]
+    for item in matches:
+        lines.append(f"{item['path']}:{item['line']}: {item['text']}")
+
+    rendered = "\n".join(lines)
+    runtime.renderer.display_info(rendered)
+    return rendered, False
+
+
 __all__ = [
     "RendererProtocol",
     "TOOL_DEFINITIONS",
@@ -686,5 +985,6 @@ __all__ = [
     "instruction_implies_write",
     "run_unit_test_coverage",
     "run_glob_search",
+    "run_search_content",
     "parse_arguments",
 ]
