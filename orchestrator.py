@@ -230,7 +230,7 @@ class Orchestrator:
                 save_path = save_config(self.config)
             except OSError as exc:
                 self.renderer.display_error(
-                    f"Failed to update config at {self._config_path}: {exc}"
+                    f"Failed to update config at {self._config_path}: {exc}" 
                 )
             else:
                 if config_missing:

@@ -345,3 +345,4 @@ def test_plan_update_validates_status():
 
     assert mutated is False
     assert message.startswith("error: todo 'oops' has invalid status")
+

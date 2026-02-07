@@ -19,6 +19,7 @@ DEFAULT_MODEL = "gpt-5-codex"
 DEFAULTS: Dict[str, Any] = {
     "openai_api_key": "",
     "model": DEFAULT_MODEL,
+    "exa_api_key": "",
 }
 
 
@@ -40,6 +41,10 @@ def load_config() -> Dict[str, Any]:
     if env_key:
         cfg["openai_api_key"] = env_key
 
+    env_exa = os.environ.get("EXA_API_KEY")
+    if env_exa:
+        cfg["exa_api_key"] = env_exa
+
     env_model = os.environ.get("AI_MODEL")
     if env_model:
         cfg["model"] = env_model
@@ -58,6 +63,7 @@ def save_config(config: Dict[str, Any]) -> Path:
     payload: Dict[str, Any] = {
         "openai_api_key": config.get("openai_api_key", ""),
         "model": config.get("model", DEFAULT_MODEL),
+        "exa_api_key": config.get("exa_api_key", ""),
     }
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     return path
