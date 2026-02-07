@@ -69,7 +69,6 @@ python main.py
 - `ai --read path/to/file.py --offset 400 --limit 200` — preview a specific slice of a file (line numbers mirror the assistant’s context hints).
 - `ai -d` — enable verbose OpenAI debug logs (writes to `debug.log` by default, or supply a path like `ai -d logs/session.log "prompt"").
 - When the assistant provides file contents, the CLI shows a unified diff for each file and asks for confirmation before writing; approved files are created or updated immediately.
-- Behind the scenes the assistant uses Codex-like tools (`read_file`, `write_file`, `update_plan`, `shell`). You’ll see plan updates, command output, and diff prompts as those tools run.
 - `ai -v` — print the installed version.
 - `ai -u` — rerun the installer script if a newer release exists.
 - `ai -h` — show the CLI help summary.
@@ -78,6 +77,17 @@ Each response streams live to your terminal, followed by the `💬 >` prompt so
 you can iterate. Editing mode (triggered by a file scope or a conversation-
 generated file) shows a unified diff and preserves permissions when you approve
 the change.
+
+## Tool Suite
+
+- `read_file` / `write` / `apply_patch` — precise file IO primitives that surface diffs and require approval before anything is persisted.
+- `glob` — repo-scoped file discovery powered by pattern matching (`src/**/*.py`, `tests/**/*_spec.py`, etc.).
+- `search_content` — ripgrep-backed content search that returns `path:line:text` snippets right in the transcript.
+- `shell` — sandboxed command runner (`!pytest`, `!ls src`) constrained to the repo root with output automatically attached to the conversation.
+- `unit_test_coverage` — one-shot `pytest --cov` runner for quick coverage spot checks.
+- `plan_update` (with legacy `update_plan`) — structured todo management so the assistant can publish, merge, and summarize task lists as work progresses.
+
+As the assistant works you’ll see tool output in-line—diff previews, coverage summaries, plan updates—so every action stays transparent.
 
 ---
 
