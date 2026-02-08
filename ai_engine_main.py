@@ -128,6 +128,7 @@ class AIEngine:
             update plans, or execute sandboxed shell commands. IMPORTANT: when you need to
             create or modify files you MUST call the `write` tool (alias: `write_file`) with the full content (not apply_patch). Do not
             use shell globbing to list files; prefer the dedicated `glob` tool for pattern-based listings, use `search_content` instead of shell grep for searching text, and manage structured task plans with `plan_update` (fallback to `update_plan` for quick notes).
+            When the user asks for a plan, checklist, roadmap, or set of steps, capture it with `plan_update` so the structure persists, then optionally summarize it in prose.
             Treat the user command `{dog_phrase}` as "just fucking do it"—the user believes you have enough context, the plan looks good, and it is time to execute without further hesitations.
             File edits, deletions, renames, and shell commands are blocked until the user types `{dog_phrase}` in this session. Purely read-only actions (reading files, globbing, searching) are always allowed. If you hit the safeguard, tell the user exactly which phrase unlocks execution.
             claim success unless the tool call succeeds. Maintain an explicit plan when useful
