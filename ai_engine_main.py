@@ -28,6 +28,7 @@ from ai_engine_tools import (
     handle_shell_command,
     handle_tool_call,
     instruction_implies_write,
+    JFDI_REQUIRED_MESSAGE,
 )
 
 NEW_CONVERSATION_TOKEN = "<<NEW_CONVERSATION>>"
@@ -52,6 +53,7 @@ class AIEngine:
         self._debug_api = settings.debug_api
         self._debug_stream: TextIO = sys.stderr
         self._settings = settings
+        self.jfdi_enabled: bool = False
 
     def _api_debug(self, message: str) -> None:
         if self._debug_api:
@@ -72,6 +74,13 @@ class AIEngine:
 
         if display_prompt:
             self.renderer.display_user_prompt(raw_prompt)
+
+        self.jfdi_enabled = False
+
+        if raw_prompt.lower() == "jfdi":
+            self.jfdi_enabled = True
+            self.renderer.display_info("Mutating tools enabled. Ready when you are.")
+            return 0
 
         repo_root = Path.cwd().resolve()
         context_settings = self.config.get("context_settings", {})
@@ -114,6 +123,8 @@ class AIEngine:
             update plans, or execute sandboxed shell commands. IMPORTANT: when you need to
             create or modify files you MUST call the `write` tool (alias: `write_file`) with the full content (not apply_patch). Do not
             use shell globbing to list files; prefer the dedicated `glob` tool for pattern-based listings, use `search_content` instead of shell grep for searching text, and manage structured task plans with `plan_update` (fallback to `update_plan` for quick notes).
+            Treat the user command `jfdi` as "just fucking do it"—the user believes you have enough context, the plan looks good, and it is time to execute without further hesitations.
+            File edits, deletions, renames, and shell commands are blocked until the user types `jfdi` in this session. If you hit that safeguard, tell the user.
             claim success unless the tool call succeeds. Maintain an explicit plan when useful
             using `update_plan`. Always cite relevant files.
             {scope_sentence}
@@ -410,6 +421,7 @@ class AIEngine:
                     last_user_message_payload = None
                     last_user_message_index = None
                     warned_no_write = False
+                    self.jfdi_enabled = False
                     self.renderer.display_info(
                         "Prompt cancelled. You can continue the conversation."
                     )
@@ -479,6 +491,10 @@ class AIEngine:
                         conversation_items.append(
                             self._make_tool_result_message(call_id, result_text)
                         )
+                        if result_text == JFDI_REQUIRED_MESSAGE:
+                            self._inform_mutation_blocked(conversation_items)
+                            tool_call_handled = True
+                            continue
                         if mutated:
                             context_dirty = True
                         tool_call_handled = True
@@ -553,6 +569,18 @@ class AIEngine:
             if follow_up is None:
                 return 0
             follow_up = follow_up.strip()
+            if follow_up.lower() == "jfdi":
+                self.jfdi_enabled = True
+                self.renderer.display_info(
+                    "Mutating tools enabled. Ready when you are."
+                )
+                pending_user_message = (
+                    "Follow-up instruction:\nUser typed `jfdi`, signaling approval to execute the existing plan. Proceed accordingly."
+                )
+                latest_instruction = "jfdi approval"
+                pending_user_is_repeat = False
+                skip_model_request = False
+                continue
             if follow_up == NEW_CONVERSATION_TOKEN:
                 self._api_debug("conversation reset requested")
                 conversation_items.clear()
@@ -569,6 +597,7 @@ class AIEngine:
                 last_user_message_payload = None
                 last_user_message_index = None
                 pending_user_is_repeat = False
+                self.jfdi_enabled = False
                 continue
             if not follow_up:
                 return 0
@@ -639,6 +668,9 @@ class AIEngine:
         *,
         model_override: Optional[str] = None,
     ) -> int:
+        if not self.jfdi_enabled:
+            self._render_mutation_blocked()
+            return 1
         target_path = Path(path).expanduser()
         if target_path.is_dir():
             self.renderer.display_info(
@@ -754,6 +786,25 @@ class AIEngine:
     def _is_responses_model(self, model: str) -> bool:
         return model.endswith("codex") or model.startswith("gpt-5")
 
+    def _mutation_blocked_message(self) -> str:
+        return "I need you to say `jfdi` before I can modify files or run shell commands."
+
+    def _render_mutation_blocked(self) -> None:
+        self.renderer.display_assistant_message(self._mutation_blocked_message())
+
+    def _inform_mutation_blocked(
+        self, conversation_items: List[Dict[str, Any]]
+    ) -> None:
+        message = self._mutation_blocked_message()
+        self.renderer.display_assistant_message(message)
+        if (
+            not conversation_items
+            or conversation_items[-1].get("role") != "assistant"
+            or not conversation_items[-1].get("content")
+            or conversation_items[-1]["content"][0].get("text") != message
+        ):
+            conversation_items.append(self._make_assistant_message(message))
+
     def _resolve_scope(self, scope: Optional[str], repo_root: Path) -> tuple[Path, str]:
         if not scope:
             return repo_root, "repository root"
@@ -793,6 +844,7 @@ class AIEngine:
             default_root=default_root,
             plan_state=plan_state,
             latest_instruction=latest_instruction,
+            jfdi_enabled=self.jfdi_enabled,
             debug=self._api_debug,
         )
 

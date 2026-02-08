@@ -102,6 +102,8 @@ def make_runtime(
         default_root=repo_root,
         plan_state={},
         latest_instruction="",
+        jfdi_enabled=False,
+        debug=lambda _msg: None,
     )
 
 
@@ -346,3 +348,33 @@ def test_plan_update_validates_status():
     assert mutated is False
     assert message.startswith("error: todo 'oops' has invalid status")
 
+
+def test_write_blocked_without_jfdi(tmp_path: Path):
+    renderer = DummyRenderer()
+    runtime = make_runtime(renderer, root=tmp_path)
+    runtime.jfdi_enabled = False
+
+    message, mutated = ai_engine_tools.handle_tool_call(
+        "write",
+        {"filePath": "notes.txt", "content": "hello"},
+        runtime,
+    )
+
+    assert mutated is False
+    assert message == ai_engine_tools.JFDI_REQUIRED_MESSAGE
+    assert not (tmp_path / "notes.txt").exists()
+
+
+def test_shell_blocked_without_jfdi():
+    renderer = DummyRenderer()
+    runtime = make_runtime(renderer)
+    runtime.jfdi_enabled = False
+
+    message, mutated = ai_engine_tools.handle_tool_call(
+        "shell",
+        {"command": "ls"},
+        runtime,
+    )
+
+    assert mutated is False
+    assert message == ai_engine_tools.JFDI_REQUIRED_MESSAGE

@@ -265,6 +265,8 @@ TOOL_DEFINITIONS = [
     },
 ]
 
+JFDI_REQUIRED_MESSAGE = "blocked: jfdi approval required"
+
 
 class RendererProtocol(Protocol):
     def display_info(self, text: str) -> None: ...
@@ -335,6 +337,7 @@ class ToolRuntime:
     default_root: Path
     plan_state: Dict[str, Any]
     latest_instruction: str
+    jfdi_enabled: bool
     debug: Callable[[str], None] = field(default=lambda _msg: None)
 
 
@@ -430,6 +433,8 @@ def handle_tool_call(
         return preview, False
 
     if tool_name in {"write", "write_file"}:
+        if not runtime.jfdi_enabled:
+            return JFDI_REQUIRED_MESSAGE, False
         path_arg = args.get("filePath") or args.get("path")
         contents = args.get("content")
         if contents is None:
@@ -450,6 +455,8 @@ def handle_tool_call(
         return status, mutated
 
     if tool_name == "apply_patch":
+        if not runtime.jfdi_enabled:
+            return JFDI_REQUIRED_MESSAGE, False
         patch_text = args.get("patch") or args.get("input")
         if not patch_text:
             return "error: missing patch", False
@@ -477,6 +484,8 @@ def handle_tool_call(
         return "applied", True
 
     if tool_name == "shell":
+        if not runtime.jfdi_enabled:
+            return JFDI_REQUIRED_MESSAGE, False
         return handle_shell_command(args, runtime)
 
     if tool_name == "update_plan":
@@ -512,6 +521,8 @@ def apply_file_update(
     *,
     auto_apply: bool,
 ) -> str:
+    if not runtime.jfdi_enabled:
+        return JFDI_REQUIRED_MESSAGE
     path = Path(filename)
     path = (
         (runtime.default_root / path).resolve()
@@ -1155,6 +1166,7 @@ __all__ = [
     "RendererProtocol",
     "TOOL_DEFINITIONS",
     "ToolRuntime",
+    "JFDI_REQUIRED_MESSAGE",
     "apply_file_update",
     "delete_path_via_shell",
     "detect_generated_files",
