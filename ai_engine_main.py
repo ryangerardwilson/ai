@@ -55,9 +55,14 @@ class AIEngine:
         self._settings = settings
         self.jfdi_enabled: bool = False
         self.dog_whistle = (config.get("dog_whistle") or "jfdi").strip() or "jfdi"
+        self._seen_writes: set[tuple[str, str]] = set()
+        self._auto_write_paths: set[str] = set()
 
     def _matches_dog_whistle(self, text: str) -> bool:
-        return text.strip().lower() == self.dog_whistle.lower()
+        needle = self.dog_whistle.lower()
+        if not needle:
+            return False
+        return needle in text.lower()
 
     def _api_debug(self, message: str) -> None:
         if self._debug_api:
@@ -80,6 +85,8 @@ class AIEngine:
             self.renderer.display_user_prompt(raw_prompt)
 
         self.jfdi_enabled = False
+        self._seen_writes.clear()
+        self._auto_write_paths.clear()
 
         if self._matches_dog_whistle(raw_prompt):
             self.jfdi_enabled = True
@@ -127,10 +134,9 @@ class AIEngine:
             You are Codex CLI operating locally. You can call tools to read files, write files,
             update plans, or execute sandboxed shell commands. IMPORTANT: when you need to
             create or modify files you MUST call the `write` tool (alias: `write_file`) with the full content (not apply_patch). Do not
-            use shell globbing to list files; prefer the dedicated `glob` tool for pattern-based listings, use `search_content` instead of shell grep for searching text, and manage structured task plans with `plan_update` (fallback to `update_plan` for quick notes).
-            When the user asks for a plan, checklist, roadmap, or set of steps, capture it with `plan_update` so the structure persists, then optionally summarize it in prose.
+            use shell globbing to list files; prefer the dedicated `glob` tool for pattern-based listings, use `search_content` instead of shell grep for searching text, and use the todo/plan tool (`plan_update`) when a structured checklist will help (multi-step work, explicit user requests, or when you need to show progress). Track tasks with the standard states (`pending`, `in_progress`, `completed`, `cancelled`) and keep at most one item `in_progress` at a time.
             Treat the user command `{dog_phrase}` as "just fucking do it"—the user believes you have enough context, the plan looks good, and it is time to execute without further hesitations.
-            File edits, deletions, renames, and shell commands are blocked until the user types `{dog_phrase}` in this session. Purely read-only actions (reading files, globbing, searching) are always allowed. If you hit the safeguard, tell the user exactly which phrase unlocks execution.
+            File edits, deletions, renames, and shell commands are blocked until the user types `{dog_phrase}` in this session. Purely read-only actions (reading files, globbing, searching) are always allowed. Mention `{dog_phrase}` only when you actually need approval—don’t repeat the reminder after you’ve delivered final results.
             claim success unless the tool call succeeds. Maintain an explicit plan when useful
             using `update_plan`. Always cite relevant files.
             {scope_sentence}
@@ -539,10 +545,23 @@ class AIEngine:
                     rendered_messages.add(render_key)
                     displayed_current_cycle = True
                 previous_message = message_text
+                if message_id == last_message_id:
+                    continue
                 is_final_summary = message_id == last_message_id
                 if is_final_summary:
                     continue
-                for filename, content in self._detect_generated_files(message_text):
+                detected_files = self._detect_generated_files(message_text)
+                for filename, content in detected_files:
+                    path_obj = Path(filename)
+                    resolved_path = (
+                        (scope_root if scope else repo_root) / path_obj
+                    ).resolve() if not path_obj.is_absolute() else path_obj.resolve()
+                    resolved_str = str(resolved_path)
+                    if resolved_str in self._auto_write_paths:
+                        continue
+                    key = (resolved_str, content)
+                    if key in self._seen_writes:
+                        continue
                     status = self._apply_file_update(
                         filename,
                         content,
@@ -550,6 +569,9 @@ class AIEngine:
                         default_root=scope_root if scope else repo_root,
                         auto_apply=self._instruction_implies_write(latest_instruction),
                     )
+                    if status in {"applied", "no_change"}:
+                        self._auto_write_paths.add(resolved_str)
+                        self._seen_writes.add(key)
                     if status == "applied":
                         manual_mutation = True
                     elif status.startswith("error"):
@@ -852,6 +874,7 @@ class AIEngine:
             plan_state=plan_state,
             latest_instruction=latest_instruction,
             jfdi_enabled=self.jfdi_enabled,
+            seen_writes=self._seen_writes,
             debug=self._api_debug,
         )
 

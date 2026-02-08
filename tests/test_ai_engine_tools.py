@@ -103,6 +103,7 @@ def make_runtime(
         plan_state={},
         latest_instruction="",
         jfdi_enabled=False,
+        seen_writes=set(),
         debug=lambda _msg: None,
     )
 

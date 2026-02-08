@@ -340,11 +340,6 @@ class CLIRenderer:
         )
 
         if not diff_lines:
-            print(
-                self._format_status(
-                    "skip", display_path, suffix=": no changes detected"
-                )
-            )
             return "no_change"
 
         print(self._format_diff(diff_lines))

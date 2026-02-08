@@ -338,6 +338,7 @@ class ToolRuntime:
     plan_state: Dict[str, Any]
     latest_instruction: str
     jfdi_enabled: bool
+    seen_writes: set[tuple[str, str]]
     debug: Callable[[str], None] = field(default=lambda _msg: None)
 
 
@@ -356,7 +357,7 @@ def detect_generated_files(message: str) -> List[tuple[str, str]]:
         r"(?:save|write|create|add|generate|produce)[^\n]{0,160}?\b(?:as|to|in)\s+`?([A-Za-z0-9._\-/]+)`?(?::)?",
         re.IGNORECASE,
     )
-    lines = message.splitlines()
+    lines = message.replace("**", "").splitlines()
     i = 0
     results: List[tuple[str, str]] = []
     while i < len(lines):
@@ -441,6 +442,16 @@ def handle_tool_call(
             contents = args.get("contents")
         if not path_arg or contents is None:
             return "error: missing file path or contents", False
+        path = Path(path_arg)
+        path = (
+            (runtime.default_root / path).resolve()
+            if not path.is_absolute()
+            else path.resolve()
+        )
+        key = (str(path), contents)
+        if key in runtime.seen_writes:
+            runtime.debug(f"tool_result name={tool_name} skipped duplicate write len={len(contents)}")
+            return "no_change", False
         auto_apply = instruction_implies_write(runtime.latest_instruction)
         status = apply_file_update(
             path_arg,
@@ -449,6 +460,8 @@ def handle_tool_call(
             auto_apply=auto_apply,
         )
         mutated = status == "applied"
+        if status in {"applied", "no_change"}:
+            runtime.seen_writes.add(key)
         runtime.debug(
             f"tool_result name={tool_name} mutated={mutated} len={len(contents)}"
         )
