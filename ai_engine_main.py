@@ -54,6 +54,10 @@ class AIEngine:
         self._debug_stream: TextIO = sys.stderr
         self._settings = settings
         self.jfdi_enabled: bool = False
+        self.dog_whistle = (config.get("dog_whistle") or "jfdi").strip() or "jfdi"
+
+    def _matches_dog_whistle(self, text: str) -> bool:
+        return text.strip().lower() == self.dog_whistle.lower()
 
     def _api_debug(self, message: str) -> None:
         if self._debug_api:
@@ -77,7 +81,7 @@ class AIEngine:
 
         self.jfdi_enabled = False
 
-        if raw_prompt.lower() == "jfdi":
+        if self._matches_dog_whistle(raw_prompt):
             self.jfdi_enabled = True
             self.renderer.display_info("Mutating tools enabled. Ready when you are.")
             return 0
@@ -117,14 +121,15 @@ class AIEngine:
             else f"Scope: {scope_label}."
         )
 
+        dog_phrase = self.dog_whistle
         system_prompt = textwrap.dedent(
             f"""
             You are Codex CLI operating locally. You can call tools to read files, write files,
             update plans, or execute sandboxed shell commands. IMPORTANT: when you need to
             create or modify files you MUST call the `write` tool (alias: `write_file`) with the full content (not apply_patch). Do not
             use shell globbing to list files; prefer the dedicated `glob` tool for pattern-based listings, use `search_content` instead of shell grep for searching text, and manage structured task plans with `plan_update` (fallback to `update_plan` for quick notes).
-            Treat the user command `jfdi` as "just fucking do it"—the user believes you have enough context, the plan looks good, and it is time to execute without further hesitations.
-            File edits, deletions, renames, and shell commands are blocked until the user types `jfdi` in this session. If you hit that safeguard, tell the user.
+            Treat the user command `{dog_phrase}` as "just fucking do it"—the user believes you have enough context, the plan looks good, and it is time to execute without further hesitations.
+            File edits, deletions, renames, and shell commands are blocked until the user types `{dog_phrase}` in this session. Purely read-only actions (reading files, globbing, searching) are always allowed. If you hit the safeguard, tell the user exactly which phrase unlocks execution.
             claim success unless the tool call succeeds. Maintain an explicit plan when useful
             using `update_plan`. Always cite relevant files.
             {scope_sentence}
@@ -569,13 +574,14 @@ class AIEngine:
             if follow_up is None:
                 return 0
             follow_up = follow_up.strip()
-            if follow_up.lower() == "jfdi":
+            if self._matches_dog_whistle(follow_up):
                 self.jfdi_enabled = True
                 self.renderer.display_info(
                     "Mutating tools enabled. Ready when you are."
                 )
                 pending_user_message = (
-                    "Follow-up instruction:\nUser typed `jfdi`, signaling approval to execute the existing plan. Proceed accordingly."
+                    "Follow-up instruction:\n"
+                    f"User typed `{self.dog_whistle}`, signaling approval to execute the existing plan. Proceed accordingly."
                 )
                 latest_instruction = "jfdi approval"
                 pending_user_is_repeat = False
@@ -787,7 +793,7 @@ class AIEngine:
         return model.endswith("codex") or model.startswith("gpt-5")
 
     def _mutation_blocked_message(self) -> str:
-        return "I need you to say `jfdi` before I can modify files or run shell commands."
+        return f"I need you to say `{self.dog_whistle}` before I can modify files or run shell commands."
 
     def _render_mutation_blocked(self) -> None:
         self.renderer.display_assistant_message(self._mutation_blocked_message())

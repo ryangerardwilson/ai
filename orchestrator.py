@@ -160,8 +160,10 @@ class Orchestrator:
         config_missing = not self._config_path.exists()
         key_value = (self.config.get("openai_api_key") or "").strip()
         model_value = (self.config.get("model") or "").strip()
+        dog_whistle = (self.config.get("dog_whistle") or "").strip()
         initial_key = key_value
         initial_model = model_value
+        initial_dog = dog_whistle
         config_changed = False
 
         if config_missing:
@@ -225,16 +227,51 @@ class Orchestrator:
             config_changed = True
         self.config["model"] = model_value
 
+        if config_missing or not dog_whistle:
+            self.renderer.display_info(
+                "Choose your approval phrase (dog whistle). When you type it, I’m cleared to modify files or run shell commands. Until then I can still read files, glob directories, and search the repo—just not change it."
+            )
+            while True:
+                prompt = (
+                    f"Dog whistle phrase (Enter to keep '{dog_whistle}' or default 'jfdi'): "
+                    if dog_whistle
+                    else "Dog whistle phrase (default 'jfdi'): "
+                )
+                entered = self.renderer.prompt_text(prompt)
+                if entered is None:
+                    self.renderer.display_error("Dog whistle input cancelled. Exiting.")
+                    sys.exit(1)
+                entered = entered.strip()
+                if entered:
+                    dog_whistle = entered
+                    break
+                if dog_whistle:
+                    break
+                dog_whistle = "jfdi"
+                break
+
+        if not dog_whistle:
+            dog_whistle = "jfdi"
+
+        if dog_whistle != initial_dog:
+            config_changed = True
+        self.config["dog_whistle"] = dog_whistle
+
         if config_missing or config_changed:
             try:
                 save_path = save_config(self.config)
             except OSError as exc:
                 self.renderer.display_error(
-                    f"Failed to update config at {self._config_path}: {exc}" 
+                    f"Failed to update config at {self._config_path}: {exc}"
                 )
             else:
                 if config_missing:
                     self.renderer.display_info(f"Configuration saved to {save_path}.")
+        elif not key_value or not model_value or not dog_whistle:
+            self.renderer.display_error(
+                "Configuration incomplete. Please rerun and provide the missing values."
+            )
+            sys.exit(1)
 
     # ------------------------------------------------------------------
     # Flag handling
@@ -428,3 +465,34 @@ class Orchestrator:
         if env_color:
             return env_color
         return "\033[1;36m"
+        if config_missing or not dog_whistle:
+            self.renderer.display_info(
+                "Choose your approval phrase (dog whistle). When you type it, I’m cleared to modify files or run shell commands."
+            )
+
+        if config_missing or not dog_whistle:
+            prompt_label = (
+                f"Dog whistle phrase (Enter to keep '{dog_whistle}' or default 'jfdi'): "
+                if dog_whistle
+                else "Dog whistle phrase (default 'jfdi'): "
+            )
+            while True:
+                entered = self.renderer.prompt_text(prompt_label)
+                if entered is None:
+                    self.renderer.display_error("Dog whistle input cancelled. Exiting.")
+                    sys.exit(1)
+                entered = entered.strip()
+                if entered:
+                    dog_whistle = entered
+                    break
+                if dog_whistle:
+                    break
+                dog_whistle = "jfdi"
+                break
+
+        if not dog_whistle:
+            dog_whistle = "jfdi"
+
+        self.config["dog_whistle"] = dog_whistle
+        if dog_whistle != initial_dog:
+            config_changed = True

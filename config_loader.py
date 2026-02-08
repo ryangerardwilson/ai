@@ -19,6 +19,7 @@ DEFAULT_MODEL = "gpt-5-codex"
 DEFAULTS: Dict[str, Any] = {
     "openai_api_key": "",
     "model": DEFAULT_MODEL,
+    "dog_whistle": "",
 }
 
 
@@ -44,6 +45,10 @@ def load_config() -> Dict[str, Any]:
     if env_model:
         cfg["model"] = env_model
 
+    env_dog = os.environ.get("DOG_WHISTLE")
+    if env_dog:
+        cfg["dog_whistle"] = env_dog
+
     return cfg
 
 
@@ -58,6 +63,7 @@ def save_config(config: Dict[str, Any]) -> Path:
     payload: Dict[str, Any] = {
         "openai_api_key": config.get("openai_api_key", ""),
         "model": config.get("model", DEFAULT_MODEL),
+        "dog_whistle": config.get("dog_whistle", "jfdi"),
     }
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     return path

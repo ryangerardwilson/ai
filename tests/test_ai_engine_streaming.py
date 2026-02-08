@@ -313,3 +313,33 @@ def test_run_conversation_streams_reasoning(monkeypatch):
     assert renderer.assistant_stream_started is True
     assert renderer.assistant_stream_chunks == ["Result ", "text"]
     assert renderer.assistant_stream_final == "Result text"
+
+
+def test_dog_whistle_custom_phrase(monkeypatch):
+    final_response = SimpleNamespace(output=[])
+
+    class EmptyStream:
+        def __iter__(self):
+            return iter([])
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        response = final_response
+
+    dummy_client = DummyClient(lambda: EmptyStream())
+    monkeypatch.setattr(ai_engine.openai, "OpenAI", lambda **kwargs: dummy_client)
+
+    renderer = DummyRenderer()
+    engine = ai_engine.AIEngine(
+        renderer=renderer, config={"openai_api_key": "sk-1", "dog_whistle": "ship it"}
+    )
+
+    rc = engine.run_conversation("ship it", None)
+
+    assert rc == 0
+    assert engine.jfdi_enabled is True
+    assert any("Mutating tools enabled" in msg for msg in renderer.infos)

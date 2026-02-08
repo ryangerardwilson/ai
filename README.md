@@ -69,7 +69,7 @@ python main.py
 - `ai --read path/to/file.py --offset 400 --limit 200` — preview a specific slice of a file (line numbers mirror the assistant’s context hints).
 - `ai -d` — enable verbose OpenAI debug logs (writes to `debug.log` by default, or supply a path like `ai -d logs/session.log "prompt"").
 - When the assistant provides file contents, the CLI shows a unified diff for each file and asks for confirmation before writing; approved files are created or updated immediately.
-- Type `jfdi` (“just fucking do it”) once you’re confident in the plan—this explicitly authorizes the assistant to write files or run shell commands.
+- Type your dog whistle approval phrase (default `jfdi`, but configurable—think `ship it`, `hakuna matata`, etc.) once you’re confident in the plan; that explicit signal unlocks file writes and shell commands for the current session.
 - `ai -v` — print the installed version.
 - `ai -u` — rerun the installer script if a newer release exists.
 - `ai -h` — show the CLI help summary.
@@ -90,15 +90,23 @@ the change.
 
 As the assistant works you’ll see tool output in-line—diff previews, coverage summaries, plan updates—so every action stays transparent.
 
+### Why a Single-Agent + Dog-Whistle Flow?
+
+- **One brain beats a committee.** Rather than juggling planner/builder/runner bots, a single assistant carries full context from plan to execution.
+- **User-controlled execution.** Your dog whistle phrase (default `jfdi`, but feel free to use `ship it`, `make it so`, `hakuna matata`) becomes the explicit “go” signal. Until you say it, nothing mutates.
+- **Transparent guardrails.** When a tool is blocked, the assistant tells you exactly why and reminds you of the phrase—no rummaging through agent logs.
+- **Easy to customize.** Teams can pick a phrase that fits their culture; set it once in config or via `DOG_WHISTLE` and keep the workflow playful *and* safe.
+
 ---
 
 ## Configuration & Environment
 
-- `~/.config/ai/config.json` (respecting `XDG_CONFIG_HOME`) stores only the OpenAI API key and the default model.
-- On first launch `ai` asks for your OpenAI API key first, then prompts for the model (press Enter to keep `gpt-5-codex`) before writing the config file for you.
+- `~/.config/ai/config.json` (respecting `XDG_CONFIG_HOME`) stores your OpenAI API key, dog whistle phrase, and default model.
+- On first launch `ai` asks for your OpenAI API key, then the dog whistle phrase (press Enter to keep `jfdi`), then prompts for the default model before writing the config file for you.
 
 - `OPENAI_API_KEY` overrides the `openai_api_key` entry at runtime (handy for CI or shells).
 - `AI_MODEL` overrides the single `model` value.
+- `DOG_WHISTLE` overrides the approval phrase used to authorize file edits and shell commands.
 - `AI_COLOR` adjusts the ANSI color prefix for assistant output.
 - `AI_SHOW_REASONING=0` (or `AI_SHOW_THINKING=0`) disables the live reasoning stream.
 - `AI_REASONING_EFFORT` tweaks how hard reasoning models think (`minimal`, `low`, `medium`, `high`, etc.); defaults to `medium` when reasoning is enabled.
