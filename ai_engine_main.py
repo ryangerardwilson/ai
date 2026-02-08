@@ -554,8 +554,10 @@ class AIEngine:
                 for filename, content in detected_files:
                     path_obj = Path(filename)
                     resolved_path = (
-                        (scope_root if scope else repo_root) / path_obj
-                    ).resolve() if not path_obj.is_absolute() else path_obj.resolve()
+                        ((scope_root if scope else repo_root) / path_obj).resolve()
+                        if not path_obj.is_absolute()
+                        else path_obj.resolve()
+                    )
                     resolved_str = str(resolved_path)
                     if resolved_str in self._auto_write_paths:
                         continue

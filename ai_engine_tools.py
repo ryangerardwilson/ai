@@ -450,7 +450,9 @@ def handle_tool_call(
         )
         key = (str(path), contents)
         if key in runtime.seen_writes:
-            runtime.debug(f"tool_result name={tool_name} skipped duplicate write len={len(contents)}")
+            runtime.debug(
+                f"tool_result name={tool_name} skipped duplicate write len={len(contents)}"
+            )
             return "no_change", False
         auto_apply = instruction_implies_write(runtime.latest_instruction)
         status = apply_file_update(
@@ -785,19 +787,14 @@ def run_glob_search(args: Dict[str, Any], runtime: ToolRuntime) -> tuple[str, bo
         runtime.renderer.display_info(message)
         return message, False
 
-    relative_matches = [
-        str(path.relative_to(runtime.base_root))
-        for path in matches
-    ]
+    relative_matches = [str(path.relative_to(runtime.base_root)) for path in matches]
     header = f"Glob matches for '{pattern_str}' (showing {len(relative_matches)}):"
     rendered = "\n".join([header, *relative_matches])
     runtime.renderer.display_info(rendered)
     return rendered, False
 
 
-def run_search_content(
-    args: Dict[str, Any], runtime: ToolRuntime
-) -> tuple[str, bool]:
+def run_search_content(args: Dict[str, Any], runtime: ToolRuntime) -> tuple[str, bool]:
     pattern_raw = args.get("pattern")
     if not isinstance(pattern_raw, str) or not pattern_raw.strip():
         return "error: pattern must be a non-empty string", False
@@ -836,11 +833,15 @@ def run_search_content(
         normalized = [item.strip() for item in patterns if item and item.strip()]
         return normalized, None
 
-    include_patterns, include_error = _normalize_patterns(args.get("include"), "include")
+    include_patterns, include_error = _normalize_patterns(
+        args.get("include"), "include"
+    )
     if include_error:
         return include_error, False
 
-    exclude_patterns, exclude_error = _normalize_patterns(args.get("exclude"), "exclude")
+    exclude_patterns, exclude_error = _normalize_patterns(
+        args.get("exclude"), "exclude"
+    )
     if exclude_error:
         return exclude_error, False
 
@@ -958,7 +959,9 @@ def run_search_content(
                 runtime.renderer.display_info(message)
                 return message, False
         else:
-            command_error = command_result.stderr.strip() or command_result.stdout.strip()
+            command_error = (
+                command_result.stderr.strip() or command_result.stdout.strip()
+            )
 
     if not matches and command_error:
         runtime.renderer.display_info(
@@ -968,9 +971,7 @@ def run_search_content(
     if not matches and not command_error and command_result is not None and rg_used:
         # rg ran successfully but produced no matches (already handled) or stdout empty
         if command_result.exit_code == 0:
-            message = (
-                f"Search pattern '{pattern}' returned no matches."
-            )
+            message = f"Search pattern '{pattern}' returned no matches."
             runtime.renderer.display_info(message)
             return message, False
 
@@ -1025,9 +1026,7 @@ def run_search_content(
                 continue
 
         if not matches:
-            message = (
-                f"Search pattern '{pattern}' returned no matches."
-            )
+            message = f"Search pattern '{pattern}' returned no matches."
             runtime.renderer.display_info(message)
             return message, False
 
@@ -1087,7 +1086,10 @@ def run_plan_update(args: Dict[str, Any], runtime: ToolRuntime) -> tuple[str, bo
 
         priority_raw = item.get("priority")
         if priority_raw is not None:
-            if not isinstance(priority_raw, str) or priority_raw not in allowed_priority:
+            if (
+                not isinstance(priority_raw, str)
+                or priority_raw not in allowed_priority
+            ):
                 return f"error: todo '{todo_id}' has invalid priority", False
             priority = priority_raw
         else:
@@ -1134,7 +1136,11 @@ def run_plan_update(args: Dict[str, Any], runtime: ToolRuntime) -> tuple[str, bo
     runtime.plan_state["todos"] = final_list
 
     summary_raw = args.get("summary")
-    summary = summary_raw.strip() if isinstance(summary_raw, str) and summary_raw.strip() else None
+    summary = (
+        summary_raw.strip()
+        if isinstance(summary_raw, str) and summary_raw.strip()
+        else None
+    )
     if summary is not None:
         runtime.plan_state["summary"] = summary
     elif "summary" in runtime.plan_state and replace:
@@ -1171,8 +1177,6 @@ def run_plan_update(args: Dict[str, Any], runtime: ToolRuntime) -> tuple[str, bo
     response = "plan updated: " + ", ".join(parts)
     runtime.debug("tool_result name=plan_update mutated=False")
     return response, False
-
-
 
 
 __all__ = [

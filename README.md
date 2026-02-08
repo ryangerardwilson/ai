@@ -88,7 +88,8 @@ the change.
 - `unit_test_coverage` — one-shot `pytest --cov` runner for quick coverage spot checks.
 - `plan_update` (with legacy `update_plan`) — structured todo management so the assistant can publish, merge, and summarize task lists as work progresses.
 
-As the assistant works you’ll see tool output in-line—diff previews, coverage summaries, plan updates—so every action stays transparent.
+As the assistant works you’ll see tool output in-line—diff previews, coverage
+summaries, plan updates—so every action stays transparent.
 
 ### Why a Single-Agent + Dog-Whistle Flow?
 

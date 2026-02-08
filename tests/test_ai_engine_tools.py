@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-import pytest
 
 import ai_engine_tools
 from bash_executor import CommandResult
@@ -47,7 +46,9 @@ class DummyRenderer:
     def prompt_follow_up(self):  # pragma: no cover
         return None
 
-    def prompt_confirm(self, prompt: str, *, default_no: bool = True) -> bool:  # pragma: no cover
+    def prompt_confirm(
+        self, prompt: str, *, default_no: bool = True
+    ) -> bool:  # pragma: no cover
         return False
 
     def start_loader(self):  # pragma: no cover
@@ -62,16 +63,22 @@ class DummyRenderer:
     def start_reasoning(self, reasoning_id: str) -> None:  # pragma: no cover
         pass
 
-    def update_reasoning(self, reasoning_id: str, delta: str) -> None:  # pragma: no cover
+    def update_reasoning(
+        self, reasoning_id: str, delta: str
+    ) -> None:  # pragma: no cover
         pass
 
-    def finish_reasoning(self, reasoning_id: str, final: str | None = None) -> None:  # pragma: no cover
+    def finish_reasoning(
+        self, reasoning_id: str, final: str | None = None
+    ) -> None:  # pragma: no cover
         pass
 
     def start_assistant_stream(self, stream_id: str) -> None:  # pragma: no cover
         pass
 
-    def update_assistant_stream(self, stream_id: str, delta: str) -> None:  # pragma: no cover
+    def update_assistant_stream(
+        self, stream_id: str, delta: str
+    ) -> None:  # pragma: no cover
         pass
 
     def finish_assistant_stream(
@@ -268,7 +275,9 @@ def test_search_content_no_matches(monkeypatch, tmp_path: Path):
 
     monkeypatch.setattr(ai_engine_tools, "run_sandboxed_bash", lambda *a, **k: result)
 
-    message, mutated = ai_engine_tools.run_search_content({"pattern": "missing"}, runtime)
+    message, mutated = ai_engine_tools.run_search_content(
+        {"pattern": "missing"}, runtime
+    )
 
     assert mutated is False
     assert message.startswith("Search pattern 'missing' returned no matches")
