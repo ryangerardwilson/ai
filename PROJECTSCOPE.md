@@ -11,29 +11,14 @@
 - **Minimal footprint** – Depend on the OpenAI Python client plus standard library functionality; keep binaries portable through PyInstaller packaging. ([requirements.txt](requirements.txt), [README.md](README.md))
 
 ## 3. Primary Workflows
-| Flow | Invocation Example | Description | Key Sources | | --- | --- | --- |
---- | | Interactive conversation | `ai` | Analyze the current repository,
-stream answers, accept iterative `💬 >` prompts, surface streamed 🤔 reasoning,
-and support buffered `!command` shell execution whose output is injected with
-your next instruction. | [README.md](README.md), [main.py](main.py) | | Prompt-
-only run | `ai "how do I write a release workflow?"` | Execute a single
-inference without entering follow-up mode. | [README.md](README.md),
-[main.py](main.py) | | File rewrite mode | `ai path/to/file.py "replace legacy
-API usage"` | Request a full-file rewrite through the edit model, review the
-unified diff with line numbers, and approve or reject changes. |
-[README.md](README.md), [main.py](main.py) | | Scoped conversation | `ai
-docs/architecture "summarize these docs"` | Limit context harvesting to a
-directory while running the conversation loop. | [README.md](README.md),
-[contextualizer.py](contextualizer.py), [main.py](main.py) | | Read-only
-preview | `ai --read path/to/file.py --offset 400 --limit 200` | Display
-bounded file slices with continuation hints. | [README.md](README.md),
-[contextualizer.py](contextualizer.py), [main.py](main.py) | | Sandboxed bash |
-Tool-assisted `shell` calls | Execute guarded shell commands with time, byte,
-and scope restrictions from within a session. |
-[bash_executor.py](bash_executor.py), [main.py](main.py) | | Self- upgrade |
-`ai -u` | Fetch and reinstall the latest tagged release using the hosted
-installer script. | [README.md](README.md), [main.py](main.py),
-[install.sh](install.sh) |
+| Flow | Invocation Example | Description | Key Sources |
+| --- | --- | --- | --- |
+| Interactive conversation | `ai` | Analyze the current repository, stream answers, accept iterative `💬 >` prompts, surface streamed 🤔 reasoning, and support buffered `!command` shell execution whose output is injected with your next instruction. | [README.md](README.md), [main.py](main.py) |
+| File rewrite mode | `ai path/to/file.py` | Start the session scoped to a single file; use the interactive prompt to request rewrites. | [README.md](README.md), [main.py](main.py) |
+| Scoped conversation | `ai docs/architecture` | Limit context harvesting to a directory while running the conversation loop. | [README.md](README.md), [contextualizer.py](contextualizer.py), [main.py](main.py) |
+| Read-only preview | `ai --read path/to/file.py --offset 400 --limit 200` | Display bounded file slices with continuation hints. | [README.md](README.md), [contextualizer.py](contextualizer.py), [main.py](main.py) |
+| Sandboxed bash | `ai '!pytest -q'` | Execute guarded shell commands with time, byte, and scope restrictions without launching the model loop. | [bash_executor.py](bash_executor.py), [main.py](main.py) |
+| Self-upgrade | `ai -u` | Fetch and reinstall the latest tagged release using the hosted installer script. | [README.md](README.md), [main.py](main.py), [install.sh](install.sh) |
 
 ## 4. Architectural Components
 - **CLI entrypoint** – Minimal launcher that hands off to the orchestrator. ([main.py](main.py))
@@ -65,7 +50,7 @@ installer script. | [README.md](README.md), [main.py](main.py),
 
 ## 8. Testing & Quality
 - Automated coverage currently targets context slicing behaviors (offset handling, truncation, directory listings). ([tests/test_contextualizer.py](tests/test_contextualizer.py))
-- There are no integration tests yet for CLI argument parsing, tool-call orchestration, diff UX, or bash sandbox enforcement—manual verification is required. ([main.py](main.py), [bash_executor.py](bash_executor.py))
+- There are limited tests for CLI argument parsing, tool-call orchestration, and bash sandbox enforcement—manual verification is still required for full coverage. ([main.py](main.py), [bash_executor.py](bash_executor.py))
 - Extra scripts generating plots (`test_funcs.py`) fall outside the formal test suite and should be quarantined or gated if packaged with the binary. ([test_funcs.py](test_funcs.py))
 
 ## 9. Release & Distribution Flow

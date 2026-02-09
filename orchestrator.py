@@ -5,8 +5,9 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, Iterable, Optional
+from typing import Dict, Iterable, Optional, Tuple
 
+from bash_executor import CommandRejected, format_command_result, run_sandboxed_bash
 from config_loader import load_config, DEFAULT_MODEL, save_config
 from config_paths import get_config_path
 from contextualizer import (
@@ -18,6 +19,7 @@ from contextualizer import (
 
 from cli_renderer import CLIRenderer
 from ai_engine import AIEngine
+from ai_engine import NEW_CONVERSATION_TOKEN
 
 
 INSTALL_SH_URL = "https://raw.githubusercontent.com/ryangerardwilson/ai/main/install.sh"
@@ -57,16 +59,19 @@ class Orchestrator:
         if primary_rc is not None:
             return primary_rc
 
-        if len(arg_list) == 1 and arg_list[0].lower() == "v":
-            edited = self.renderer.edit_prompt()
-            if edited is None:
+        shell_invocation = self._detect_shell_invocation(arg_list)
+        if shell_invocation is not None:
+            command, scope = shell_invocation
+            command = command.strip()
+            if not command:
+                self.renderer.display_error("Shell command cannot be empty.")
                 return 1
-            prompt_text = edited.strip()
-            if not prompt_text:
-                self.renderer.display_info("Prompt cancelled (empty message).")
-                return 0
-            self.renderer.display_user_prompt(prompt_text)
-            return self.engine.run_conversation(prompt_text, None, display_prompt=False)
+            display = f"!{command}" if command else "!"
+            self.renderer.display_user_prompt(display)
+            return self._run_shell_command(command, scope)
+
+        if not arg_list:
+            return self._start_interactive_session()
 
         args = self._parse_args(arg_list)
         context_defaults = self.config.get("context_settings", {})
@@ -101,6 +106,105 @@ class Orchestrator:
             if close_debug_stream and debug_stream and debug_stream is not sys.stderr:
                 debug_stream.close()
 
+    # ------------------------------------------------------------------
+    # Shell helpers
+    # ------------------------------------------------------------------
+    def _detect_shell_invocation(self, args: list[str]) -> Optional[Tuple[str, Optional[str]]]:
+        if not args:
+            return None
+
+        first = args[0]
+        if first.startswith("!"):
+            command = self._compose_shell_command(first[1:], args[1:])
+            return command, None
+
+        if len(args) >= 2 and args[1].startswith("!"):
+            candidate_scope = Path(args[0]).expanduser()
+            if candidate_scope.exists():
+                command = self._compose_shell_command(args[1][1:], args[2:])
+                return command, str(candidate_scope)
+
+        return None
+
+    @staticmethod
+    def _compose_shell_command(head: str, tail: Iterable[str]) -> str:
+        parts: list[str] = []
+        head = (head or "").strip()
+        if head:
+            parts.append(head)
+        for item in tail:
+            if item:
+                parts.append(item)
+        return " ".join(parts)
+
+    def _run_shell_command(self, command: str, scope: Optional[str]) -> int:
+        repo_root = Path.cwd().resolve()
+        cwd = repo_root
+
+        if scope:
+            scope_path = Path(scope).expanduser()
+            if not scope_path.exists():
+                self.renderer.display_error(f"Scope path not found: {scope_path}")
+                return 1
+            if scope_path.is_file():
+                scope_path = scope_path.parent
+            cwd = scope_path.resolve()
+
+        try:
+            result = run_sandboxed_bash(
+                command,
+                cwd=cwd,
+                scope_root=repo_root,
+                timeout=30,
+                max_output_bytes=20000,
+            )
+        except CommandRejected as exc:
+            self.renderer.display_error(f"command rejected: {exc}")
+            return 1
+        except Exception as exc:  # pragma: no cover - defensive guard
+            self.renderer.display_error(f"error running command: {exc}")
+            return 1
+
+        formatted = format_command_result(result)
+        if formatted:
+            self.renderer.display_shell_output(formatted)
+        return int(result.exit_code)
+
+    # ------------------------------------------------------------------
+    # Interactive helpers
+    # ------------------------------------------------------------------
+    def _start_interactive_session(self) -> int:
+        self.renderer.display_info(
+            "Interactive session started. Type your instruction at the prompt (Ctrl+D to exit)."
+        )
+
+        while True:
+            instruction = self.renderer.prompt_follow_up()
+            if instruction is None:
+                return 0
+            instruction = instruction.strip()
+            if not instruction:
+                self.renderer.display_info("Please provide an instruction or press Ctrl+D to exit.")
+                continue
+            if instruction == NEW_CONVERSATION_TOKEN:
+                self.renderer.display_info("Starting fresh. Provide your instruction.")
+                continue
+            if instruction.startswith("!"):
+                self.renderer.display_user_prompt(instruction)
+                command_text = instruction[1:].strip()
+                if not command_text:
+                    self.renderer.display_error("Shell command cannot be empty.")
+                    continue
+                self._run_shell_command(command_text, None)
+                continue
+            self.renderer.display_user_prompt(instruction)
+            return self.engine.run_conversation(
+                instruction, None, display_prompt=False
+            )
+
+    # ------------------------------------------------------------------
+    # Command execution
+    # ------------------------------------------------------------------
     def _execute_command(
         self, args: argparse.Namespace, context_defaults: Dict[str, int]
     ) -> int:
@@ -118,40 +222,13 @@ class Orchestrator:
                 },
             )
 
-        scope_candidate = args.scope_or_prompt
-        prompt_components = list(args.prompt)
-        scope_arg: Optional[str] = None
-
-        if scope_candidate:
-            candidate_path = Path(scope_candidate).expanduser()
-            if candidate_path.exists():
-                scope_arg = str(candidate_path)
-                prompt_text = " ".join(prompt_components).strip()
-                if candidate_path.is_file():
-                    if not prompt_text:
-                        self.renderer.display_info(
-                            "Provide an instruction after the file path."
-                        )
-                        return 1
-                    return self.engine.run_edit(scope_arg, prompt_text)
-                else:
-                    if not prompt_text:
-                        self.renderer.display_info("Provide a question or instruction.")
-                        return 1
-                    return self.engine.run_conversation(
-                        prompt_text, scope_arg, display_prompt=False
-                    )
-            else:
-                prompt_components.insert(0, scope_candidate)
-
-        prompt_text = " ".join(prompt_components).strip()
-        if not prompt_text:
-            self._print_help()
+        if getattr(args, "scope_or_prompt", None) or getattr(args, "prompt", None):
+            self.renderer.display_error(
+                "Inline prompts are no longer supported. Launch ai without arguments and type your instruction at the prompt."
+            )
             return 1
 
-        return self.engine.run_conversation(
-            prompt_text, scope_arg, display_prompt=False
-        )
+        return self._start_interactive_session()
 
     # ------------------------------------------------------------------
     # Setup helpers
@@ -375,9 +452,9 @@ class Orchestrator:
             help="Maximum bytes to load",
         )
         parser.add_argument(
-            "scope_or_prompt", nargs="?", help="Optional scope or beginning of prompt"
+            "scope_or_prompt", nargs="?", help="(deprecated)"
         )
-        parser.add_argument("prompt", nargs="*", help="Additional prompt words")
+        parser.add_argument("prompt", nargs="*", help="(deprecated)")
         parser.add_argument(
             "-d",
             "--debug",
@@ -449,12 +526,12 @@ class Orchestrator:
         print(
             "ai - Codex-style terminal assistant\n\n"
             "Usage:\n"
-            '  ai [SCOPE] "question or instruction"\n'
-            "      SCOPE (optional) is a file or directory to focus on\n"
-            "      When SCOPE is a file, ai proposes edits with diff approval\n"
-            "  ai -h            Show this help\n"
-            "  ai -v            Show installed version\n"
-            "  ai -u            Reinstall the latest release if a newer version exists"
+            "  ai              Start an interactive session\n"
+            "  ai '!command'   Run a sandboxed shell command immediately\n"
+            "  ai --read PATH  Preview a file slice\n"
+            "  ai -h           Show this help\n"
+            "  ai -v           Show installed version\n"
+            "  ai -u           Reinstall the latest release if a newer version exists"
         )
 
     @staticmethod
@@ -465,34 +542,3 @@ class Orchestrator:
         if env_color:
             return env_color
         return "\033[1;36m"
-        if config_missing or not dog_whistle:
-            self.renderer.display_info(
-                "Choose your approval phrase (dog whistle). When you type it, I’m cleared to modify files or run shell commands."
-            )
-
-        if config_missing or not dog_whistle:
-            prompt_label = (
-                f"Dog whistle phrase (Enter to keep '{dog_whistle}' or default 'jfdi'): "
-                if dog_whistle
-                else "Dog whistle phrase (default 'jfdi'): "
-            )
-            while True:
-                entered = self.renderer.prompt_text(prompt_label)
-                if entered is None:
-                    self.renderer.display_error("Dog whistle input cancelled. Exiting.")
-                    sys.exit(1)
-                entered = entered.strip()
-                if entered:
-                    dog_whistle = entered
-                    break
-                if dog_whistle:
-                    break
-                dog_whistle = "jfdi"
-                break
-
-        if not dog_whistle:
-            dog_whistle = "jfdi"
-
-        self.config["dog_whistle"] = dog_whistle
-        if dog_whistle != initial_dog:
-            config_changed = True

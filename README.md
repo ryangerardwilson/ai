@@ -54,20 +54,17 @@ python main.py
 
 ## Usage
 
-- `ai` — analyze the current repository and start an interactive Q&A conversation (use the `💬 >` prompt to continue, or press Enter to finish).
-- `ai "how do I write a release workflow?"` — run a one-off prompt; the assistant answers once and exits.
-- `ai path/to/file.py "replace legacy API usage"` — trigger file-edit mode: the model rewrites the file, you review the diff, and confirm or reject the change.
-- `ai path/to/directory "summarize the services"` — scope the conversation to that directory; the assistant gathers context from the subtree before replying.
-- `ai "what is the objective of this repo"` — summarize the repository snapshot and cite relevant files.
-- `ai docs/architecture "summarize these docs"` — limit the analysis to the `docs/architecture` directory before answering.
+- `ai` — launches an interactive session immediately. Type your first instruction at the `💬 >` prompt.
+- Within the session, the assistant analyzes the current repository, streams answers live, and waits for follow-up prompts until you press Enter on an empty line or hit `Ctrl+D`.
+- Use in-session instructions to request scoped analyses or edits (for example: “Focus on `path/to/file.py` and rewrite the error handling.”).
+- `ai '!pytest -q'` — run a sandboxed shell command immediately; the command output is shown without entering the model loop.
+- `ai --read path/to/file.py --offset 400 --limit 200` — preview a specific slice of a file (line numbers mirror the assistant’s context hints).
 - `ai v` — open Vim (or `$EDITOR`) immediately to craft the first prompt before the session starts.
-- In interactive mode you can run sandboxed shell commands with `!command` (for example `!ls src`). The output is shown immediately and the transcript is attached to the conversation the next time you send a regular prompt.
 - Type `v` at the `💬 >` prompt to pop open Vim (or `$EDITOR`) so you can draft the next instruction before sending it; you can add text after `v` to seed the buffer.
 - Type `help` for an inline cheat sheet or `new` to reset the current conversation context without exiting.
 - While a response streams you can press `q` to stop the current reply or `r` to retry the same prompt without leaving the session.
 - When supported by the model, `ai` streams the agent’s reasoning as a dim `🤖` line while it thinks; set `AI_SHOW_REASONING=0` (legacy `AI_SHOW_THINKING=0`) to suppress it.
-- `ai --read path/to/file.py --offset 400 --limit 200` — preview a specific slice of a file (line numbers mirror the assistant’s context hints).
-- `ai -d` — enable verbose OpenAI debug logs (writes to `debug.log` by default, or supply a path like `ai -d logs/session.log "prompt"").
+- `ai -d` — enable verbose OpenAI debug logs (writes to `debug.log` by default, or supply a path like `ai -d logs/session.log`).
 - When the assistant provides file contents, the CLI shows a unified diff for each file and asks for confirmation before writing; approved files are created or updated immediately.
 - Type your dog whistle approval phrase (default `jfdi`, but configurable—think `ship it`, `hakuna matata`, etc.) once you’re confident in the plan; that explicit signal unlocks file writes and shell commands for the current session.
 - `ai -v` — print the installed version.
