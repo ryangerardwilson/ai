@@ -146,7 +146,7 @@ class InlineModeRenderer:
                         tool_name, arguments_payload, runtime
                     )
                     conversation_items.append(
-                        self._make_tool_result_message(call_id, result_text)
+                        self._make_tool_result_message(call_id, "ok")
                     )
                     tool_calls += 1
                 elif item_type == "reasoning":
@@ -163,7 +163,11 @@ class InlineModeRenderer:
             pending_reasoning_queue.clear()
 
             if tool_calls:
-                continue
+                if assistant_messages:
+                    self.renderer.display_assistant_message(assistant_messages[-1])
+                else:
+                    self.renderer.display_assistant_message("Done.")
+                return 0
 
             if assistant_messages:
                 self.renderer.display_assistant_message(assistant_messages[-1])

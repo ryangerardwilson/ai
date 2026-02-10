@@ -24,7 +24,6 @@ from ai_engine_tools import (
     ToolRuntime,
     apply_file_update,
     delete_path_via_shell,
-    detect_generated_files,
     handle_shell_command,
     handle_tool_call,
     instruction_implies_write,
@@ -56,7 +55,6 @@ class AIEngine:
         self.jfdi_enabled: bool = False
         self.dog_whistle = (config.get("dog_whistle") or "jfdi").strip() or "jfdi"
         self._seen_writes: set[tuple[str, str]] = set()
-        self._auto_write_paths: set[str] = set()
 
     def _matches_dog_whistle(self, text: str) -> bool:
         needle = self.dog_whistle.lower()
@@ -86,7 +84,6 @@ class AIEngine:
 
         self.jfdi_enabled = False
         self._seen_writes.clear()
-        self._auto_write_paths.clear()
 
         if self._matches_dog_whistle(raw_prompt):
             self.jfdi_enabled = True
@@ -488,7 +485,7 @@ class AIEngine:
                             latest_instruction=latest_instruction,
                         )
                         conversation_items.append(
-                            self._make_tool_result_message(call_id, result_text)
+                            self._make_tool_result_message(call_id, "ok")
                         )
                         if result_text == JFDI_REQUIRED_MESSAGE:
                             self._inform_mutation_blocked(conversation_items)
@@ -514,9 +511,8 @@ class AIEngine:
             # end if not skip_model_request
 
             if tool_call_handled:
-                continue
+                pass
 
-            manual_mutation = False
             if assistant_messages:
                 last_message_id = assistant_messages[-1][1]
             else:
@@ -534,42 +530,8 @@ class AIEngine:
                 previous_message = message_text
                 if message_id == last_message_id:
                     continue
-                is_final_summary = message_id == last_message_id
-                if is_final_summary:
-                    continue
-                detected_files = self._detect_generated_files(message_text)
-                for filename, content in detected_files:
-                    path_obj = Path(filename)
-                    resolved_path = (
-                        ((scope_root if scope else repo_root) / path_obj).resolve()
-                        if not path_obj.is_absolute()
-                        else path_obj.resolve()
-                    )
-                    resolved_str = str(resolved_path)
-                    if resolved_str in self._auto_write_paths:
-                        continue
-                    key = (resolved_str, content)
-                    if key in self._seen_writes:
-                        continue
-                    status = self._apply_file_update(
-                        filename,
-                        content,
-                        base_root=repo_root,
-                        default_root=scope_root if scope else repo_root,
-                        auto_apply=self._instruction_implies_write(latest_instruction),
-                    )
-                    if status in {"applied", "no_change"}:
-                        self._auto_write_paths.add(resolved_str)
-                        self._seen_writes.add(key)
-                    if status == "applied":
-                        manual_mutation = True
-                    elif status.startswith("error"):
-                        self.renderer.display_error(status)
-            if manual_mutation:
-                context_dirty = True
-                warned_no_write = False
 
-            if assistant_messages and not manual_mutation:
+            if assistant_messages:
                 if not warned_no_write and any(
                     re.search(
                         r"\b(created|saved|written|added|generated)\b",
@@ -930,9 +892,6 @@ class AIEngine:
             latest_instruction="",
         )
         return handle_shell_command(args, runtime)
-
-    def _detect_generated_files(self, message: str) -> List[tuple[str, str]]:
-        return detect_generated_files(message)
 
     def _instruction_implies_write(self, text: str) -> bool:
         return instruction_implies_write(text)
