@@ -218,9 +218,8 @@ class AIEngine:
 
                 try:
                     self.renderer.start_hotkey_listener()
-                    if not self.show_reasoning:
-                        self.renderer.start_loader()
-                        loader_started = True
+                    self.renderer.start_loader()
+                    loader_started = True
 
                     reasoning_payload = None
                     if self.show_reasoning and self.reasoning_effort:
@@ -271,6 +270,9 @@ class AIEngine:
                                 "response.reasoning_text.delta",
                                 "response.reasoning_summary_text.delta",
                             }:
+                                if loader_started:
+                                    self.renderer.stop_loader()
+                                    loader_started = False
                                 if not self.show_reasoning:
                                     continue
                                 text = getattr(event, "delta", "")
