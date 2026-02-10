@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional, TextIO
 import openai
 
 from ai_engine_config import build_engine_settings, resolve_model
-from ai_engine_tools import READONLY_TOOL_DEFINITIONS, ToolRuntime, handle_tool_call
+from ai_engine_tools import TOOL_DEFINITIONS, ToolRuntime, handle_tool_call
 from contextualizer import (
     DEFAULT_READ_LIMIT,
     MAX_READ_BYTES,
@@ -72,9 +72,8 @@ class InlineModeRenderer:
 
         system_prompt = (
             "You are Codex CLI inline mode. Provide a single, self-contained answer. "
-            "You may use read-only tools (read_file, glob, search_content) to inspect the repository. "
-            "Do not ask follow-up questions, do not claim to have edited files or run shell commands, "
-            "and do not output patch or write instructions as if they were applied."
+            "You can call tools to read files, write files, update plans, or execute sandboxed shell commands. "
+            "Do not ask follow-up questions; complete the requested task and exit."
         )
 
         user_message = "\n".join(
@@ -85,7 +84,7 @@ class InlineModeRenderer:
                 "Task:",
                 raw_prompt,
                 "",
-                "Inline mode: read-only; answer once and exit.",
+                "Inline mode: one-shot; answer once and exit.",
             ]
         )
 
@@ -99,7 +98,7 @@ class InlineModeRenderer:
             default_root=repo_root,
             plan_state={},
             latest_instruction=raw_prompt,
-            jfdi_enabled=False,
+            jfdi_enabled=True,
             seen_writes=set(),
             debug=self._api_debug,
         )
@@ -116,6 +115,7 @@ class InlineModeRenderer:
 
             tool_calls = 0
             assistant_messages: List[str] = []
+            pending_reasoning_queue: List[Dict[str, Any]] = []
 
             for item in getattr(response, "output", []) or []:
                 item_type = getattr(item, "type", "")
@@ -132,6 +132,8 @@ class InlineModeRenderer:
                     raw_call_id = getattr(item, "call_id", None) or raw_item_id
                     call_id = str(raw_call_id or f"tool-{tool_name}")
                     arguments_payload = item_payload.get("arguments", {})
+                    if pending_reasoning_queue:
+                        conversation_items.append(pending_reasoning_queue.pop(0))
                     conversation_items.append(
                         self._make_tool_call_item(
                             call_id=call_id,
@@ -147,6 +149,18 @@ class InlineModeRenderer:
                         self._make_tool_result_message(call_id, result_text)
                     )
                     tool_calls += 1
+                elif item_type == "reasoning":
+                    reasoning_payload = self._convert_response_item(item)
+                    sanitized = {
+                        key: value
+                        for key, value in reasoning_payload.items()
+                        if key in {"type", "id", "summary", "content"}
+                        and value is not None
+                    }
+                    sanitized.setdefault("type", "reasoning")
+                    pending_reasoning_queue.append(sanitized)
+
+            pending_reasoning_queue.clear()
 
             if tool_calls:
                 continue
@@ -174,11 +188,13 @@ class InlineModeRenderer:
                 "inline request model=%s items=%d"
                 % (model_id, len(conversation_items))
             )
+            conversation_payload: Any = conversation_items
+            tools_payload: Any = TOOL_DEFINITIONS
             response = self.client.responses.create(
                 model=model_id,
                 instructions=system_prompt,
-                input=conversation_items,
-                tools=READONLY_TOOL_DEFINITIONS,
+                input=conversation_payload,
+                tools=tools_payload,
                 tool_choice="auto",
             )
             self._api_debug(
