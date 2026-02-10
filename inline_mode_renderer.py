@@ -189,8 +189,7 @@ class InlineModeRenderer:
         self.renderer.start_loader()
         try:
             self._api_debug(
-                "inline request model=%s items=%d"
-                % (model_id, len(conversation_items))
+                "inline request model=%s items=%d" % (model_id, len(conversation_items))
             )
             conversation_payload: Any = conversation_items
             tools_payload: Any = TOOL_DEFINITIONS
@@ -202,8 +201,7 @@ class InlineModeRenderer:
                 tool_choice="auto",
             )
             self._api_debug(
-                "inline response status=%s"
-                % (getattr(response, "status", None))
+                "inline response status=%s" % (getattr(response, "status", None))
             )
             return response
         except Exception as exc:

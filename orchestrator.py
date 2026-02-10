@@ -126,7 +126,9 @@ class Orchestrator:
     # ------------------------------------------------------------------
     # Shell helpers
     # ------------------------------------------------------------------
-    def _detect_shell_invocation(self, args: list[str]) -> Optional[Tuple[str, Optional[str]]]:
+    def _detect_shell_invocation(
+        self, args: list[str]
+    ) -> Optional[Tuple[str, Optional[str]]]:
         if not args:
             return None
 
@@ -201,7 +203,9 @@ class Orchestrator:
                 return 0
             instruction = instruction.strip()
             if not instruction:
-                self.renderer.display_info("Please provide an instruction or press Ctrl+D to exit.")
+                self.renderer.display_info(
+                    "Please provide an instruction or press Ctrl+D to exit."
+                )
                 continue
             if instruction == NEW_CONVERSATION_TOKEN:
                 self.renderer.display_info("Starting fresh. Provide your instruction.")
@@ -215,9 +219,7 @@ class Orchestrator:
                 self._run_shell_command(command_text, None)
                 continue
             self.renderer.display_user_prompt(instruction)
-            return self.engine.run_conversation(
-                instruction, None, display_prompt=False
-            )
+            return self.engine.run_conversation(instruction, None, display_prompt=False)
 
     # ------------------------------------------------------------------
     # Command execution
@@ -465,9 +467,7 @@ class Orchestrator:
             default=None,
             help="Maximum bytes to load",
         )
-        parser.add_argument(
-            "scope_or_prompt", nargs="?", help="(deprecated)"
-        )
+        parser.add_argument("scope_or_prompt", nargs="?", help="(deprecated)")
         parser.add_argument("prompt", nargs="*", help="(deprecated)")
         parser.add_argument(
             "-d",

@@ -86,13 +86,21 @@ def orchestrator_factory(monkeypatch, tmp_path):
     def _build(*, prompt_inputs=None, follow_ups=None):
         renderer_box = {}
 
-        monkeypatch.setattr(orchestrator, "load_config", lambda: {
-            "openai_api_key": "test-key",
-            "model": "test-model",
-            "dog_whistle": "jfdi",
-        })
-        monkeypatch.setattr(orchestrator, "get_config_path", lambda: tmp_path / "config.json")
-        monkeypatch.setattr(orchestrator.Orchestrator, "_bootstrap_config", lambda self: None)
+        monkeypatch.setattr(
+            orchestrator,
+            "load_config",
+            lambda: {
+                "openai_api_key": "test-key",
+                "model": "test-model",
+                "dog_whistle": "jfdi",
+            },
+        )
+        monkeypatch.setattr(
+            orchestrator, "get_config_path", lambda: tmp_path / "config.json"
+        )
+        monkeypatch.setattr(
+            orchestrator.Orchestrator, "_bootstrap_config", lambda self: None
+        )
 
         def build_renderer(*_args, **_kwargs):
             renderer = DummyRenderer(prompt_inputs=prompt_inputs, follow_ups=follow_ups)
@@ -110,7 +118,9 @@ def orchestrator_factory(monkeypatch, tmp_path):
     return _build
 
 
-def test_run_shell_command_executes_immediately(monkeypatch, orchestrator_factory, tmp_path):
+def test_run_shell_command_executes_immediately(
+    monkeypatch, orchestrator_factory, tmp_path
+):
     orch, renderer, _ = orchestrator_factory()
 
     capture = {}
@@ -144,7 +154,9 @@ def test_run_shell_command_executes_immediately(monkeypatch, orchestrator_factor
     assert capture["command"] == "echo hello world"
     assert capture["cwd"] == scope_dir.resolve()
     assert capture["scope_root"] == Path.cwd().resolve()
-    assert renderer.shell_outputs and renderer.shell_outputs[0].startswith("stdout:\nok")
+    assert renderer.shell_outputs and renderer.shell_outputs[0].startswith(
+        "stdout:\nok"
+    )
     assert renderer.user_prompts[0] == "!echo hello world"
 
     rc_again = orch.run(["!pwd"])
@@ -153,7 +165,9 @@ def test_run_shell_command_executes_immediately(monkeypatch, orchestrator_factor
 
 
 def test_interactive_flow_without_args(monkeypatch, orchestrator_factory):
-    orch, renderer, engine = orchestrator_factory(follow_ups=["review README for typos"])
+    orch, renderer, engine = orchestrator_factory(
+        follow_ups=["review README for typos"]
+    )
 
     result = orch.run([])
 
@@ -168,4 +182,6 @@ def test_inline_prompt_arguments_rejected(orchestrator_factory):
     rc = orch.run(["how", "are", "you?"])
 
     assert rc == 1
-    assert any("Inline prompts are no longer supported" in msg for msg in renderer.errors)
+    assert any(
+        "Inline prompts are no longer supported" in msg for msg in renderer.errors
+    )

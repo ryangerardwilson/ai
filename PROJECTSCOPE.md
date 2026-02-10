@@ -11,14 +11,25 @@
 - **Minimal footprint** – Depend on the OpenAI Python client plus standard library functionality; keep binaries portable through PyInstaller packaging. ([requirements.txt](requirements.txt), [README.md](README.md))
 
 ## 3. Primary Workflows
-| Flow | Invocation Example | Description | Key Sources |
-| --- | --- | --- | --- |
-| Interactive conversation | `ai` | Analyze the current repository, stream answers, accept iterative `💬 >` prompts, surface streamed 🤔 reasoning, and support buffered `!command` shell execution whose output is injected with your next instruction. | [README.md](README.md), [main.py](main.py) |
-| File rewrite mode | `ai path/to/file.py` | Start the session scoped to a single file; use the interactive prompt to request rewrites. | [README.md](README.md), [main.py](main.py) |
-| Scoped conversation | `ai docs/architecture` | Limit context harvesting to a directory while running the conversation loop. | [README.md](README.md), [contextualizer.py](contextualizer.py), [main.py](main.py) |
-| Read-only preview | `ai --read path/to/file.py --offset 400 --limit 200` | Display bounded file slices with continuation hints. | [README.md](README.md), [contextualizer.py](contextualizer.py), [main.py](main.py) |
-| Sandboxed bash | `ai '!pytest -q'` | Execute guarded shell commands with time, byte, and scope restrictions without launching the model loop. | [bash_executor.py](bash_executor.py), [main.py](main.py) |
-| Self-upgrade | `ai -u` | Fetch and reinstall the latest tagged release using the hosted installer script. | [README.md](README.md), [main.py](main.py), [install.sh](install.sh) |
+| Flow | Invocation Example | Description | Key Sources | | --- | --- | --- |
+--- | | Interactive conversation | `ai` | Analyze the current repository,
+stream answers, accept iterative `💬 >` prompts, surface streamed 🤔 reasoning,
+and support buffered `!command` shell execution whose output is injected with
+your next instruction. | [README.md](README.md), [main.py](main.py) | | File
+rewrite mode | `ai path/to/file.py` | Start the session scoped to a single
+file; use the interactive prompt to request rewrites. | [README.md](README.md),
+[main.py](main.py) | | Scoped conversation | `ai docs/architecture` | Limit
+context harvesting to a directory while running the conversation loop. |
+[README.md](README.md), [contextualizer.py](contextualizer.py),
+[main.py](main.py) | | Read-only preview | `ai --read path/to/file.py --offset
+400 --limit 200` | Display bounded file slices with continuation hints. |
+[README.md](README.md), [contextualizer.py](contextualizer.py),
+[main.py](main.py) | | Sandboxed bash | `ai '!pytest -q'` | Execute guarded
+shell commands with time, byte, and scope restrictions without launching the
+model loop. | [bash_executor.py](bash_executor.py), [main.py](main.py) | |
+Self-upgrade | `ai -u` | Fetch and reinstall the latest tagged release using
+the hosted installer script. | [README.md](README.md), [main.py](main.py),
+[install.sh](install.sh) |
 
 ## 4. Architectural Components
 - **CLI entrypoint** – Minimal launcher that hands off to the orchestrator. ([main.py](main.py))
