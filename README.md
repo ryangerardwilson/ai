@@ -57,6 +57,8 @@ python main.py
 - `ai` — launches an interactive session immediately. Type your first instruction at the `💬 >` prompt.
 - Within the session, the assistant analyzes the current repository, streams answers live, and waits for follow-up prompts until you press Enter on an empty line or hit `Ctrl+D`.
 - Use in-session instructions to request scoped analyses or edits (for example: “Focus on `path/to/file.py` and rewrite the error handling.”).
+- `ai "how do i add 2 and 2 in python"` — run a one-shot inline prompt (read-only, no follow-ups).
+- `ai path/to/file.py path/to/other.py "what are these files about"` — inline prompt scoped to one or more files or directories.
 - `ai '!pytest -q'` — run a sandboxed shell command immediately; the command output is shown without entering the model loop.
 - `ai --read path/to/file.py --offset 400 --limit 200` — preview a specific slice of a file (line numbers mirror the assistant’s context hints).
 - `ai v` — open Vim (or `$EDITOR`) immediately to craft the first prompt before the session starts.

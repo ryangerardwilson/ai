@@ -20,6 +20,7 @@ from contextualizer import (
 from cli_renderer import CLIRenderer
 from ai_engine import AIEngine
 from ai_engine import NEW_CONVERSATION_TOKEN
+from inline_prompt_mode import parse_inline_prompt, run_inline_prompt
 
 
 INSTALL_SH_URL = "https://raw.githubusercontent.com/ryangerardwilson/ai/main/install.sh"
@@ -69,6 +70,22 @@ class Orchestrator:
             display = f"!{command}" if command else "!"
             self.renderer.display_user_prompt(display)
             return self._run_shell_command(command, scope)
+
+        inline_parse = parse_inline_prompt(arg_list)
+        if inline_parse is not None:
+            if inline_parse.error:
+                self.renderer.display_error(inline_parse.error)
+                return 1
+            if inline_parse.request is None:
+                self.renderer.display_error("Inline prompt could not be parsed.")
+                return 1
+            return run_inline_prompt(
+                prompt=inline_parse.request.prompt,
+                scopes=inline_parse.request.scopes,
+                renderer=self.renderer,
+                config=self.config,
+                default_model=self.engine.default_model,
+            )
 
         if not arg_list:
             return self._start_interactive_session()
@@ -223,9 +240,6 @@ class Orchestrator:
             )
 
         if getattr(args, "scope_or_prompt", None) or getattr(args, "prompt", None):
-            self.renderer.display_error(
-                "Inline prompts are no longer supported. Launch ai without arguments and type your instruction at the prompt."
-            )
             return 1
 
         return self._start_interactive_session()
@@ -527,6 +541,8 @@ class Orchestrator:
             "ai - Codex-style terminal assistant\n\n"
             "Usage:\n"
             "  ai              Start an interactive session\n"
+            "  ai 'question'   Run a one-shot inline prompt\n"
+            "  ai PATH 'q'     Run an inline prompt scoped to PATH\n"
             "  ai '!command'   Run a sandboxed shell command immediately\n"
             "  ai --read PATH  Preview a file slice\n"
             "  ai -h           Show this help\n"

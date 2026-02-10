@@ -265,6 +265,11 @@ TOOL_DEFINITIONS = [
     },
 ]
 
+READONLY_TOOL_NAMES = {"read_file", "glob", "search_content"}
+READONLY_TOOL_DEFINITIONS = [
+    tool for tool in TOOL_DEFINITIONS if tool.get("name") in READONLY_TOOL_NAMES
+]
+
 JFDI_REQUIRED_MESSAGE = "blocked: jfdi approval required"
 
 
@@ -1182,6 +1187,7 @@ def run_plan_update(args: Dict[str, Any], runtime: ToolRuntime) -> tuple[str, bo
 __all__ = [
     "RendererProtocol",
     "TOOL_DEFINITIONS",
+    "READONLY_TOOL_DEFINITIONS",
     "ToolRuntime",
     "JFDI_REQUIRED_MESSAGE",
     "apply_file_update",
