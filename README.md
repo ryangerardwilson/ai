@@ -37,7 +37,6 @@ Installer flags of note:
 - `-u`: reinstall only if GitHub has something newer than your current local copy.
 - `-b /path/to/ai-linux-x64.tar.gz`: install from an already-downloaded archive.
 - `-h`: show installer usage.
-- `--no-modify-path`: skip editing shell rc files; the script prints the `PATH` entry you need.
 
 You can also download the `ai-linux-x64.tar.gz` artifact manually from the
 releases page and run `install.sh --binary` if you prefer to manage the bundle

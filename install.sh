@@ -24,7 +24,6 @@ Options:
                              Without an argument, print the latest release version and exit
   -u                         Reinstall the latest release if it is newer (upgrade)
   -b, --binary <path>        Install from a local binary bundle
-      --no-modify-path       Skip editing shell rc files
 EOF
 }
 
@@ -33,7 +32,6 @@ die() { echo -e "${RED}$1${NC}" >&2; exit 1; }
 
 requested_version=${VERSION:-}
 binary_path=""
-no_modify_path=false
 show_latest=false
 upgrade=false
 
@@ -61,7 +59,6 @@ while [[ $# -gt 0 ]]; do
       binary_path="$2"
       shift 2
       ;;
-    --no-modify-path) no_modify_path=true; shift ;;
     --version)
       info "--version is deprecated. Use -v instead."
       if [[ -n "${2:-}" && "${2:0:1}" != "-" ]]; then
@@ -200,7 +197,7 @@ maybe_add_path() {
   info "Add to PATH manually: $command"
 }
 
-if ! $no_modify_path && [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
+if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
   if [[ $(basename "${SHELL:-bash}") == "fish" ]]; then
     maybe_add_path "fish_add_path $INSTALL_DIR"
   else
