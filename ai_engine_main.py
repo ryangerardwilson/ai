@@ -212,14 +212,11 @@ class AIEngine:
                 skip_model_request = False
             else:
                 response = None
-                loader_started = False
                 reasoning_buffers: dict[str, str] = {}
                 cancel_action: Optional[str] = None
 
                 try:
                     self.renderer.start_hotkey_listener()
-                    self.renderer.start_loader()
-                    loader_started = True
 
                     reasoning_payload = None
                     if self.show_reasoning and self.reasoning_effort:
@@ -270,9 +267,6 @@ class AIEngine:
                                 "response.reasoning_text.delta",
                                 "response.reasoning_summary_text.delta",
                             }:
-                                if loader_started:
-                                    self.renderer.stop_loader()
-                                    loader_started = False
                                 if not self.show_reasoning:
                                     continue
                                 text = getattr(event, "delta", "")
@@ -324,9 +318,6 @@ class AIEngine:
                                 delta = getattr(event, "delta", "")
                                 if not delta:
                                     continue
-                                if loader_started:
-                                    self.renderer.stop_loader()
-                                    loader_started = False
                                 key = self._assistant_key(event)
                                 if key not in assistant_stream_buffers:
                                     assistant_stream_buffers[key] = ""
@@ -395,8 +386,6 @@ class AIEngine:
                             self.renderer.finish_reasoning(
                                 reasoning_id, text.strip() or None
                             )
-                    if loader_started:
-                        self.renderer.stop_loader()
                     self.renderer.display_info("\nInterrupted by user.")
                     return 130
                 except Exception as exc:
@@ -405,13 +394,9 @@ class AIEngine:
                             self.renderer.finish_reasoning(
                                 reasoning_id, text.strip() or None
                             )
-                    if loader_started:
-                        self.renderer.stop_loader()
                     self.renderer.display_error(f"Error: {exc}")
                     return 1
                 finally:
-                    if loader_started:
-                        self.renderer.stop_loader()
                     self.renderer.stop_hotkey_listener()
 
                 if cancel_action:

@@ -102,6 +102,7 @@ class CLIRenderer:
         self._hotkey_stop = stop_event
         self._hotkey_fd = fd
         self._hotkey_termios = original_attrs
+        self.start_loader()
 
         def worker() -> None:
             try:
@@ -170,6 +171,7 @@ class CLIRenderer:
         self._hotkey_stop = None
         self._hotkey_fd = None
         self._hotkey_termios = None
+        self.stop_loader()
 
     def poll_hotkey_event(self) -> Optional[str]:
         with self._hotkey_lock:
@@ -565,6 +567,7 @@ class CLIRenderer:
     def update_reasoning(self, reasoning_id: str, delta: str) -> None:
         if not self._show_reasoning:
             return
+        self.stop_loader()
         existing = self._reasoning_buffers.get(reasoning_id, "")
         existing += delta
         self._reasoning_buffers[reasoning_id] = existing
@@ -663,6 +666,7 @@ class CLIRenderer:
             print(prefix, end="", flush=True)
 
     def update_assistant_stream(self, stream_id: str, delta: str) -> None:
+        self.stop_loader()
         buffer = self._assistant_streams.get(stream_id)
         if buffer is None:
             self.start_assistant_stream(stream_id)

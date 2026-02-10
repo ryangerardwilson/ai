@@ -59,6 +59,7 @@ python main.py
 - Use in-session instructions to request scoped analyses or edits (for example: “Focus on `path/to/file.py` and rewrite the error handling.”).
 - `ai "how do i add 2 and 2 in python"` — run a one-shot inline prompt (no follow-ups).
 - `ai path/to/file.py path/to/other.py "what are these files about"` — inline prompt scoped to one or more files or directories.
+- Inline prompts can read, write, and run sandboxed commands immediately to complete the request in a single run.
 - `ai '!pytest -q'` — run a sandboxed shell command immediately; the command output is shown without entering the model loop.
 - `ai --read path/to/file.py --offset 400 --limit 200` — preview a specific slice of a file (line numbers mirror the assistant’s context hints).
 - `ai v` — open Vim (or `$EDITOR`) immediately to craft the first prompt before the session starts.
@@ -66,6 +67,7 @@ python main.py
 - Type `help` for an inline cheat sheet or `new` to reset the current conversation context without exiting.
 - While a response streams you can press `q` to stop the current reply or `r` to retry the same prompt without leaving the session.
 - When supported by the model, `ai` streams the agent’s reasoning as a dim `🤖` line while it thinks; set `AI_SHOW_REASONING=0` (legacy `AI_SHOW_THINKING=0`) to suppress it.
+- A multi-dot loader appears while the model is preparing a response and clears as soon as output begins streaming.
 - `ai -d` — enable verbose OpenAI debug logs (writes to `debug.log` by default, or supply a path like `ai -d logs/session.log`).
 - When the assistant provides file contents, the CLI shows a unified diff for each file and asks for confirmation before writing; approved files are created or updated immediately.
 - Type your dog whistle approval phrase (default `jfdi`, but configurable—think `ship it`, `hakuna matata`, etc.) once you’re confident in the plan; that explicit signal unlocks file writes and shell commands for the current session.
