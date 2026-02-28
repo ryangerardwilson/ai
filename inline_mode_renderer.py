@@ -31,6 +31,7 @@ class InlineModeRenderer:
         renderer: Any,
         config: Dict[str, Any],
         default_model: str = "gpt-5-codex",
+        enforce_mutation_for_edit_requests: bool = True,
     ) -> None:
         self.renderer = renderer
         self.config = config
@@ -40,6 +41,7 @@ class InlineModeRenderer:
         self.client = openai.OpenAI(api_key=self._api_key)
         self._debug_api = settings.debug_api
         self._debug_stream: TextIO = sys.stderr
+        self._enforce_mutation_for_edit_requests = enforce_mutation_for_edit_requests
 
     def _api_debug(self, message: str) -> None:
         if self._debug_api:
@@ -80,11 +82,17 @@ class InlineModeRenderer:
             "inline", self.config, default_model=self.default_model
         )
 
+        write_guard = (
+            "If the task asks to change files, you must use write/write_file/apply_patch to actually make the change. "
+            "Never claim files were changed unless a mutating tool call succeeded. "
+            if self._enforce_mutation_for_edit_requests
+            else "Do not claim file changes unless you actually performed them via tools. "
+        )
+
         system_prompt = (
             "You are Codex CLI inline mode. Provide a single, self-contained answer. "
             "You can call tools to read files, write files, update plans, or execute sandboxed shell commands. "
-            "If the task asks to change files, you must use write/write_file/apply_patch to actually make the change. "
-            "Never claim files were changed unless a mutating tool call succeeded. "
+            f"{write_guard}"
             "Do not ask follow-up questions; complete the requested task and exit."
         )
 
@@ -177,7 +185,11 @@ class InlineModeRenderer:
             pending_reasoning_queue.clear()
 
             if tool_calls:
-                if requires_file_edit and not mutation_applied:
+                if (
+                    self._enforce_mutation_for_edit_requests
+                    and requires_file_edit
+                    and not mutation_applied
+                ):
                     self.renderer.display_error(
                         "No file changes were applied. The model must call a mutating tool for edit requests."
                     )
@@ -189,7 +201,7 @@ class InlineModeRenderer:
                 return 0
 
             if assistant_messages:
-                if requires_file_edit:
+                if self._enforce_mutation_for_edit_requests and requires_file_edit:
                     self.renderer.display_error(
                         "No file changes were applied. The model answered without using a mutating tool."
                     )

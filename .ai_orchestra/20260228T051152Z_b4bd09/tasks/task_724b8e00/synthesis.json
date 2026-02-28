@@ -1,0 +1,12 @@
+{
+  "task_id": "task_724b8e00",
+  "consensus": "[cello]\nInline scope not found: /home/ryan/Apps/ai/premise\n\ud83d\udcac > Design the drama's moral engine with a high-stakes dilemma and consequential climax choice.\n\n[harp]\nInline scope not found: /home/ryan/Apps/ai/protagonist\n\ud83d\udcac > Build psychologically distinct characters and relationship fractures that generate conflict.\n\n[piano]\nInline scope not found: /home/ryan/Apps/ai/opening image\n\ud83d\udcac > Compose a tight 3-act beat sheet with escalating stakes and causal continuity.\n\n[violin]\nInline scope not found: /home/ryan/Apps/ai/scene objective\n\ud83d\udcac > Draft a gripping opening scene rich in subtext, power shifts, and immediate stakes.\n\n[flute]\nInline scope not found: /home/ryan/Apps/ai/cliche audit\n\ud83d\udcac > Critique and refine for originality, emotional pacing, and cohesion.",
+  "disagreements": [],
+  "recommended_path": "Review musician outputs and choose the strongest combined plan.",
+  "confidence": 0.5,
+  "risks": [],
+  "next_actions": [
+    "Refine mandates",
+    "Dispatch another round if needed"
+  ]
+}

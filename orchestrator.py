@@ -21,6 +21,7 @@ from cli_renderer import CLIRenderer
 from ai_engine import AIEngine
 from ai_engine import NEW_CONVERSATION_TOKEN
 from inline_prompt_mode import parse_inline_prompt, run_inline_prompt
+from orchestra_mode import run_orchestra_cleanup, run_orchestra_mode
 
 
 INSTALL_SH_URL = "https://raw.githubusercontent.com/ryangerardwilson/ai/main/install.sh"
@@ -227,6 +228,20 @@ class Orchestrator:
     def _execute_command(
         self, args: argparse.Namespace, context_defaults: Dict[str, int]
     ) -> int:
+        if getattr(args, "orchestrator_cleanup", False):
+            return run_orchestra_cleanup(
+                renderer=self.renderer,
+                repo_root=Path.cwd().resolve(),
+            )
+
+        if getattr(args, "orchestrator", False):
+            return run_orchestra_mode(
+                renderer=self.renderer,
+                config=self.config,
+                default_model=self.engine.default_model,
+                repo_root=Path.cwd().resolve(),
+            )
+
         if args.read:
             return self._show_file_slice(
                 args.read,
@@ -477,6 +492,18 @@ class Orchestrator:
             const=True,
             default=None,
             help="Enable reasoning debug logs (optionally write to file)",
+        )
+        parser.add_argument(
+            "-o",
+            "--orchestrator",
+            action="store_true",
+            help="Run orchestrator mode with musician agents",
+        )
+        parser.add_argument(
+            "-c",
+            "--orchestrator-cleanup",
+            action="store_true",
+            help="Close all tmux panes in current window except current pane",
         )
         return parser.parse_args(argv)
 

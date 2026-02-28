@@ -1,0 +1,20 @@
+{
+  "assignment_id": "asg_17468d6c",
+  "task_id": "task_724b8e00",
+  "musician": "piano",
+  "goal": "Compose a 12-beat three-act outline for the same drama with escalation, midpoint reversal, dark night, and final image.",
+  "scope": [],
+  "constraints": [
+    "Cause-effect continuity",
+    "No deus ex machina"
+  ],
+  "timeout_ms": 120000,
+  "status": "completed",
+  "created_at": "2026-02-28T05:14:35.351711+00:00",
+  "started_at": "2026-02-28T05:14:35Z",
+  "finished_at": "2026-02-28T05:14:41Z",
+  "pane_id": "%16",
+  "log_path": "/home/ryan/Apps/ai/.ai_orchestra/20260228T051152Z_b4bd09/logs/musicians/piano.log",
+  "result_ref": "/home/ryan/Apps/ai/.ai_orchestra/20260228T051152Z_b4bd09/logs/musicians/piano.log",
+  "error": null
+}

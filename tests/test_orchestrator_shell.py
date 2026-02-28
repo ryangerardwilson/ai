@@ -196,3 +196,41 @@ def test_inline_prompt_arguments_run_inline_mode(monkeypatch, orchestrator_facto
     assert captured["scopes"] == []
     assert captured["default_model"] == "test-model"
     assert renderer.errors == []
+
+
+def test_orchestrator_flag_routes_to_orchestra_mode(monkeypatch, orchestrator_factory):
+    orch, _renderer, _ = orchestrator_factory()
+
+    captured = {}
+
+    def fake_orchestra_mode(*, renderer, config, default_model, repo_root):
+        captured["renderer"] = renderer
+        captured["config"] = config
+        captured["default_model"] = default_model
+        captured["repo_root"] = repo_root
+        return 0
+
+    monkeypatch.setattr(orchestrator, "run_orchestra_mode", fake_orchestra_mode)
+
+    rc = orch.run(["-o"])
+
+    assert rc == 0
+    assert captured["default_model"] == "test-model"
+
+
+def test_orchestrator_cleanup_flag_routes_to_cleanup(monkeypatch, orchestrator_factory):
+    orch, _renderer, _ = orchestrator_factory()
+
+    captured = {}
+
+    def fake_cleanup(*, renderer, repo_root):
+        captured["renderer"] = renderer
+        captured["repo_root"] = repo_root
+        return 0
+
+    monkeypatch.setattr(orchestrator, "run_orchestra_cleanup", fake_cleanup)
+
+    rc = orch.run(["-oc"])
+
+    assert rc == 0
+    assert isinstance(captured["repo_root"], Path)

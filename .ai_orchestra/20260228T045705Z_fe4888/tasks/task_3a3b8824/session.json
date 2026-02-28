@@ -1,0 +1,108 @@
+{
+  "task_id": "task_3a3b8824",
+  "user_goal": "Audit whether README.md accurately matches the current implementation across the repository, identifying confirmed matches, mismatches, and stale docs. Propose exact README corrections if needed.",
+  "depth_profile": "deep",
+  "task_type": "documentation-audit",
+  "created_at": "2026-02-28T04:57:42.687022+00:00",
+  "updated_at": "2026-02-28T04:58:18.108354+00:00",
+  "mandates": [
+    {
+      "musician": "cello",
+      "title": "CLI behavior and gating audit",
+      "objective": "Verify README claims about interactive/inline workflows, dog-whistle mutation gating, and shell command behavior against orchestrator/engine code and tests.",
+      "method": [
+        "Inspect orchestrator.py, ai_engine_main.py, inline_prompt_mode.py, inline_mode_renderer.py, bash_executor.py",
+        "Cross-check README usage and safeguards sections line-by-line",
+        "Cite concrete code evidence and identify mismatches"
+      ],
+      "deliverable_format": "bulleted_memo",
+      "evidence_requirements": [
+        "File:line references for each confirmed or mismatched claim",
+        "Distinguish exact match vs partial vs incorrect"
+      ],
+      "non_goals": [
+        "Do not propose stylistic rewrites unrelated to factual accuracy"
+      ],
+      "stop_conditions": [
+        "Core workflow claims are fully mapped to implementation"
+      ],
+      "mode": "analysis",
+      "priority": "high"
+    },
+    {
+      "musician": "harp",
+      "title": "Tools and architecture audit",
+      "objective": "Validate README Tool Suite and development architecture claims against ai_engine_tools.py, ai_engine.py, PROJECTSCOPE.md, and tests.",
+      "method": [
+        "Inventory implemented tools and exported tool definitions",
+        "Check whether tool descriptions and behavior constraints are accurate",
+        "Flag missing/new tools not documented"
+      ],
+      "deliverable_format": "bulleted_memo",
+      "evidence_requirements": [
+        "Concrete symbol/function names and file references",
+        "Call out stale or omitted features"
+      ],
+      "non_goals": [
+        "Do not modify files"
+      ],
+      "stop_conditions": [
+        "All Tool Suite and Development claims are reconciled"
+      ],
+      "mode": "analysis",
+      "priority": "high"
+    },
+    {
+      "musician": "piano",
+      "title": "Config/env and install/release audit",
+      "objective": "Verify README installation, upgrade, release, and environment variable claims against install.sh, config_loader.py, config_paths.py, ai_engine_config.py, and workflow files.",
+      "method": [
+        "Check installer flags, default paths, upgrade semantics",
+        "Validate env var precedence and supported toggles",
+        "Cross-check release workflow statements"
+      ],
+      "deliverable_format": "bulleted_memo",
+      "evidence_requirements": [
+        "File path and behavior evidence for each claim",
+        "Highlight any inaccurate wording"
+      ],
+      "non_goals": [
+        "No speculative future recommendations"
+      ],
+      "stop_conditions": [
+        "Installation/config/release sections fully validated"
+      ],
+      "mode": "analysis",
+      "priority": "high"
+    },
+    {
+      "musician": "violin",
+      "title": "Repo-wide mismatch synthesis scout",
+      "objective": "Perform broad repo scan for major implementation shifts (e.g., orchestra/multi-agent files) that conflict with README\u2019s single-agent positioning.",
+      "method": [
+        "Scan for orchestration modules and runtime entry points",
+        "Determine if user-facing behavior exposes multi-agent features",
+        "Classify conflict severity and remediation suggestions"
+      ],
+      "deliverable_format": "bulleted_memo",
+      "evidence_requirements": [
+        "List concrete files/classes/flags showing feature presence or absence",
+        "Explain whether mismatch is user-visible or internal-only"
+      ],
+      "non_goals": [
+        "Avoid duplicating deep checks already covered by others"
+      ],
+      "stop_conditions": [
+        "Major strategic/documentation drift areas identified"
+      ],
+      "mode": "analysis",
+      "priority": "medium"
+    }
+  ],
+  "assignment_ids": [
+    "asg_63b01708",
+    "asg_4fef29cd",
+    "asg_e740631c",
+    "asg_a86c21c4"
+  ]
+}

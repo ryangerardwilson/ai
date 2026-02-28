@@ -120,7 +120,7 @@ summaries, plan updates—so every action stays transparent.
 - `~/.config/ai/config.json` (respecting `XDG_CONFIG_HOME`) stores your OpenAI API key, dog whistle phrase, and default model.
 - On first launch `ai` asks for your OpenAI API key, then prompts for the default model, then asks for your dog whistle phrase (press Enter to keep `jfdi`) before writing the config file.
 
-- `OPENAI_API_KEY` overrides the `openai_api_key` entry at runtime (handy for CI or shells).
+- `OPENAI_API_KEY` is used when `openai_api_key` is not set in config (handy for CI or shells).
 - `AI_MODEL` overrides the single `model` value.
 - `DOG_WHISTLE` overrides the approval phrase used to authorize interactive model-driven file edits and tool shell commands.
 - `AI_COLOR` adjusts the ANSI color prefix for assistant output.

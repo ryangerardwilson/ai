@@ -1,0 +1,12 @@
+{
+  "task_id": "task_3a3b8824",
+  "consensus": "[cello]\n4. Soften shell security language to guardrails/policy-based restrictions, with timeout/scope/output caps.\n5. If README says \u201call file edits must use write,\u201d note:\n   - normal mode system prompt enforces `write`/`write_file` preference,\n   - inline prompt allows `write/write_file/apply_patch`,\n   - runtime support depends on `handle_tool_call` tool registry.\n\n[harp]\n- \u201cTooling is split into:\n  - core repo/shell/edit tools (`read_file`, `write*`, `shell`, `glob`, `search_content`, `unit_test_coverage`, planning tools), and\n  - orchestration tools (`compose_ensemble`, mandate management, dispatch/poll/wait/cancel, synthesis).\u201d\n\nThis will align README claims with actual exports and runtime architecture.\n\n[piano]\n\n## Suggested README edits (minimal)\n- Replace:\n  - \u201c(unless you opt out)\u201d \u2192 \u201cif possible, by updating a writable shell rc file\u201d.\n- Keep upgrade/release/config sections largely as-is; they are mostly aligned.\n\n[violin]\nInline scope not found: /home/ryan/Apps/ai/**/*.py\n\ud83d\udcac > Repo-wide drift scan for README positioning conflicts, especially single-agent/no-multi-agent vs present orchestrator ensemble modules.",
+  "disagreements": [],
+  "recommended_path": "Review musician outputs and choose the strongest combined plan.",
+  "confidence": 0.5,
+  "risks": [],
+  "next_actions": [
+    "Refine mandates",
+    "Dispatch another round if needed"
+  ]
+}

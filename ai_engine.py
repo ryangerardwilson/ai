@@ -11,7 +11,7 @@ from ai_engine_main import (
     format_context_for_prompt,
     openai as _openai,
 )
-from ai_engine_tools import TOOL_DEFINITIONS
+from ai_engine_tools import TOOL_DEFINITIONS, ORCHESTRA_TOOL_DEFINITIONS
 
 openai = _openai
 
@@ -19,6 +19,7 @@ __all__ = [
     "AIEngine",
     "RendererProtocol",
     "TOOL_DEFINITIONS",
+    "ORCHESTRA_TOOL_DEFINITIONS",
     "NEW_CONVERSATION_TOKEN",
     "DEFAULT_READ_LIMIT",
     "MAX_READ_BYTES",

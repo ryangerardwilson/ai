@@ -1,0 +1,24 @@
+{
+  "assignment_id": "asg_1e1d034c",
+  "task_id": "task_75a3aeea",
+  "musician": "flute",
+  "goal": "Write the final polished thriller short story using approved structure, suspense map, characters, and audit fixes.",
+  "scope": [
+    "full narrative draft",
+    "twist payoff",
+    "clean ending"
+  ],
+  "constraints": [
+    "1200-1800 words target.",
+    "Keep tone taut and cinematic."
+  ],
+  "timeout_ms": 180000,
+  "status": "completed",
+  "created_at": "2026-02-28T05:46:44.139797+00:00",
+  "started_at": "2026-02-28T05:46:44Z",
+  "finished_at": "2026-02-28T05:46:44Z",
+  "pane_id": "%34",
+  "log_path": "/home/ryan/Apps/ai/.ai_orchestra/20260228T054522Z_72c9cc/logs/musicians/flute.log",
+  "result_ref": "/home/ryan/Apps/ai/.ai_orchestra/20260228T054522Z_72c9cc/logs/musicians/flute.log",
+  "error": null
+}

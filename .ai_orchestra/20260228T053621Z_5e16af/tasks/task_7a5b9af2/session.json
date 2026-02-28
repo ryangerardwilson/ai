@@ -1,0 +1,142 @@
+{
+  "task_id": "task_7a5b9af2",
+  "user_goal": "Write an original book featuring 5 compelling characters, with strong narrative arc, emotional depth, and satisfying ending.",
+  "depth_profile": "deep",
+  "task_type": "creative_writing",
+  "created_at": "2026-02-28T05:36:36.111032+00:00",
+  "updated_at": "2026-02-28T05:37:08.112430+00:00",
+  "mandates": [
+    {
+      "musician": "cello",
+      "title": "Narrative Architect",
+      "objective": "Design the novel\u2019s core structure (beginning, escalation, climax, resolution) with clear emotional progression.",
+      "method": [
+        "Define the inciting incident and central conflict.",
+        "Map a 3-act or 4-part progression with turning points.",
+        "Ensure payoff for setup elements by the ending."
+      ],
+      "deliverable_format": "outline_memo",
+      "evidence_requirements": [
+        "Include at least 8 major plot beats.",
+        "Identify where each of the 5 main characters changes."
+      ],
+      "non_goals": [
+        "Do not write full chapters.",
+        "Do not use generic or interchangeable character motivations."
+      ],
+      "stop_conditions": [
+        "Plot arc is coherent and end-state is satisfying.",
+        "All five protagonists are integrated into central conflict."
+      ],
+      "mode": "creative",
+      "priority": "high"
+    },
+    {
+      "musician": "harp",
+      "title": "Character Psychologist",
+      "objective": "Create five compelling, distinct characters with internal contradictions, desires, fears, and relationship tensions.",
+      "method": [
+        "Draft each character\u2019s external goal and internal wound.",
+        "Define character voice markers and behavioral tells.",
+        "Map pairwise relationship dynamics and conflict vectors."
+      ],
+      "deliverable_format": "character_dossiers",
+      "evidence_requirements": [
+        "Five dossiers, one per main character.",
+        "Each dossier must include flaw, fear, secret, and growth potential."
+      ],
+      "non_goals": [
+        "Do not collapse characters into archetypes without nuance.",
+        "Do not focus on side characters."
+      ],
+      "stop_conditions": [
+        "All five characters feel distinguishable and emotionally resonant.",
+        "Interpersonal dynamics can sustain a full novel."
+      ],
+      "mode": "creative",
+      "priority": "high"
+    },
+    {
+      "musician": "piano",
+      "title": "World & Theme Composer",
+      "objective": "Build setting, motifs, and thematic spine that support emotional stakes and character transformation.",
+      "method": [
+        "Propose a concrete setting with sensory texture.",
+        "Select 2-3 recurring motifs tied to character arcs.",
+        "Tie theme statements to plot consequences."
+      ],
+      "deliverable_format": "theme_setting_brief",
+      "evidence_requirements": [
+        "At least three motifs and where they recur.",
+        "Theme linked to ending resolution."
+      ],
+      "non_goals": [
+        "Do not overbuild lore irrelevant to plot.",
+        "Do not produce detached philosophical essay."
+      ],
+      "stop_conditions": [
+        "Setting and theme materially influence character decisions.",
+        "Motifs can be woven into chapter-level scenes."
+      ],
+      "mode": "creative",
+      "priority": "medium"
+    },
+    {
+      "musician": "violin",
+      "title": "Scene & Voice Stylist",
+      "objective": "Draft representative prose style, chapter rhythm, and emotional scene design for readability and impact.",
+      "method": [
+        "Define narrative POV and tense.",
+        "Recommend chapter cadence with hooks.",
+        "Provide style guide for dialogue/action/introspection balance."
+      ],
+      "deliverable_format": "style_playbook",
+      "evidence_requirements": [
+        "Include opening scene strategy and final chapter tone target.",
+        "Provide at least 6 concrete prose guidelines."
+      ],
+      "non_goals": [
+        "Do not produce purple prose samples only.",
+        "Do not ignore pacing."
+      ],
+      "stop_conditions": [
+        "Style guidance is actionable for full-book drafting.",
+        "Voice supports character distinctiveness."
+      ],
+      "mode": "creative",
+      "priority": "medium"
+    },
+    {
+      "musician": "flute",
+      "title": "Continuity & Cohesion Editor",
+      "objective": "Stress-test outline for continuity, pacing, and emotional payoff; identify weak links and fixes.",
+      "method": [
+        "Check causal logic across plot beats.",
+        "Audit each character arc for completion.",
+        "Flag pacing troughs and propose compress/expand edits."
+      ],
+      "deliverable_format": "editorial_risk_report",
+      "evidence_requirements": [
+        "List top risks with mitigation.",
+        "Verify ending resolves both external and internal conflicts."
+      ],
+      "non_goals": [
+        "Do not introduce new unrelated subplots.",
+        "Do not rewrite entire plan from scratch unless necessary."
+      ],
+      "stop_conditions": [
+        "No unresolved major contradiction remains.",
+        "Ending payoff is credible and earned."
+      ],
+      "mode": "critical",
+      "priority": "high"
+    }
+  ],
+  "assignment_ids": [
+    "asg_40ae1a5e",
+    "asg_7871d691",
+    "asg_51018173",
+    "asg_9e8b283b",
+    "asg_62a690a4"
+  ]
+}

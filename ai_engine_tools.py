@@ -265,6 +265,195 @@ TOOL_DEFINITIONS = [
     },
 ]
 
+ORCHESTRA_TOOL_DEFINITIONS = [
+    {
+        "type": "function",
+        "name": "compose_ensemble",
+        "description": "Design a fresh set of musician mandates for the current task.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "user_goal": {"type": "string"},
+                "depth_profile": {
+                    "type": "string",
+                    "enum": ["quick", "standard", "deep"],
+                },
+                "task_type": {"type": "string"},
+                "max_musicians": {"type": "integer", "minimum": 1, "maximum": 5},
+            },
+            "required": ["user_goal"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "set_musician_mandates",
+        "description": "Set or replace musician mandates for an active task.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string"},
+                "mandates": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "musician": {
+                                "type": "string",
+                                "enum": ["cello", "harp", "piano", "violin", "flute"],
+                            },
+                            "title": {"type": "string"},
+                            "objective": {"type": "string"},
+                            "method": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                            },
+                            "deliverable_format": {"type": "string"},
+                            "evidence_requirements": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                            },
+                            "non_goals": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                            },
+                            "stop_conditions": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                            },
+                            "mode": {"type": "string"},
+                            "priority": {"type": "string"},
+                        },
+                        "required": ["musician", "title", "objective"],
+                    },
+                },
+            },
+            "required": ["task_id", "mandates"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "dispatch_by_mandate",
+        "description": "Dispatch assignments to musicians in parallel or sequential mode.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string"},
+                "mode": {"type": "string", "enum": ["parallel", "sequential"]},
+                "dispatch_plan": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "musician": {
+                                "type": "string",
+                                "enum": ["cello", "harp", "piano", "violin", "flute"],
+                            },
+                            "goal_override": {"type": "string"},
+                            "scope": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                            },
+                            "constraints": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                            },
+                            "timeout_ms": {"type": "integer", "minimum": 1},
+                        },
+                        "required": ["musician"],
+                    },
+                },
+            },
+            "required": ["task_id"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "poll_assignments",
+        "description": "Poll current assignment statuses for a task.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string"},
+                "statuses": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["task_id"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "wait_assignment",
+        "description": "Wait for assignment completion or timeout.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "assignment_id": {"type": "string"},
+                "timeout_ms": {"type": "integer", "minimum": 1},
+            },
+            "required": ["assignment_id"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "collect_assignment_result",
+        "description": "Collect structured result output for an assignment.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "assignment_id": {"type": "string"},
+            },
+            "required": ["assignment_id"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "cancel_assignment",
+        "description": "Cancel an assignment.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "assignment_id": {"type": "string"},
+                "reason": {"type": "string"},
+            },
+            "required": ["assignment_id"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "synthesize_ensemble",
+        "description": "Synthesize assignment outputs into one recommendation.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string"},
+                "assignment_ids": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["task_id"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "list_musicians",
+        "description": "List active and available musicians.",
+        "parameters": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "type": "function",
+        "name": "reset_task_ensemble",
+        "description": "Clear mandates for a task and redefine them from scratch.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string"},
+            },
+            "required": ["task_id"],
+        },
+    },
+]
+
+ORCHESTRA_TOOL_NAMES = {
+    tool.get("name") for tool in ORCHESTRA_TOOL_DEFINITIONS if tool.get("name")
+}
+
 READONLY_TOOL_NAMES = {"read_file", "glob", "search_content"}
 READONLY_TOOL_DEFINITIONS = [
     tool for tool in TOOL_DEFINITIONS if tool.get("name") in READONLY_TOOL_NAMES
@@ -361,12 +550,33 @@ class ToolRuntime:
 
 def instruction_implies_write(text: str) -> bool:
     normalized = text.lower()
-    return bool(
+    path_hint = bool(
         re.search(
-            r"\b(write|create|add|generate|produce|save|append|commit|apply|patch|update|make|build|draft|add it|addit|writeit)\b",
+            r"(`[^`]+`|\b[A-Za-z0-9_./-]+\.(?:py|md|txt|json|yaml|yml|toml|ini|sh|js|ts|tsx|jsx|rs|go|java|c|cpp|h)\b)",
             normalized,
         )
     )
+    context_hint = path_hint or bool(
+        re.search(r"\b(file|files|code|repo|repository|module|script|readme)\b", normalized)
+    )
+
+    strong_verbs = bool(
+        re.search(
+            r"\b(write|edit|modify|refactor|patch|update|save|append|delete|remove|rename|implement)\b",
+            normalized,
+        )
+    )
+    weak_verbs = bool(
+        re.search(r"\b(create|add|generate|produce|make|build|draft)\b", normalized)
+    )
+
+    if "write_file" in normalized or "apply_patch" in normalized:
+        return True
+    if strong_verbs and context_hint:
+        return True
+    if weak_verbs and context_hint:
+        return True
+    return False
 
 
 def detect_generated_files(message: str) -> List[tuple[str, str]]:
@@ -1213,6 +1423,8 @@ def run_plan_update(args: Dict[str, Any], runtime: ToolRuntime) -> tuple[str, bo
 __all__ = [
     "RendererProtocol",
     "TOOL_DEFINITIONS",
+    "ORCHESTRA_TOOL_DEFINITIONS",
+    "ORCHESTRA_TOOL_NAMES",
     "READONLY_TOOL_DEFINITIONS",
     "ToolRuntime",
     "JFDI_REQUIRED_MESSAGE",

@@ -1,0 +1,24 @@
+{
+  "assignment_id": "asg_13050cdc",
+  "task_id": "task_724b8e00",
+  "musician": "flute",
+  "goal": "Critique and refine for originality, emotional pacing, and cohesion.",
+  "scope": [
+    "cliche audit",
+    "motif recommendation",
+    "revision priorities"
+  ],
+  "constraints": [
+    "Provide at least 5 concrete notes",
+    "Do not rewrite entire story"
+  ],
+  "timeout_ms": 120000,
+  "status": "completed",
+  "created_at": "2026-02-28T05:14:04.414069+00:00",
+  "started_at": "2026-02-28T05:14:04Z",
+  "finished_at": "2026-02-28T05:14:14Z",
+  "pane_id": "%18",
+  "log_path": "/home/ryan/Apps/ai/.ai_orchestra/20260228T051152Z_b4bd09/logs/musicians/flute.log",
+  "result_ref": "/home/ryan/Apps/ai/.ai_orchestra/20260228T051152Z_b4bd09/logs/musicians/flute.log",
+  "error": null
+}

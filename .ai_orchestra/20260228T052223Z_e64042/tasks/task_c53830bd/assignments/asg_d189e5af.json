@@ -1,0 +1,25 @@
+{
+  "assignment_id": "asg_d189e5af",
+  "task_id": "task_c53830bd",
+  "musician": "harp",
+  "goal": "Define tone, theme, imagery, and voice guidance to maximize emotional pull.",
+  "scope": [
+    "theme",
+    "motifs",
+    "POV and style"
+  ],
+  "constraints": [
+    "Practical guidance for one short story",
+    "Avoid ornate excess",
+    "Support character and plot"
+  ],
+  "timeout_ms": 120000,
+  "status": "completed",
+  "created_at": "2026-02-28T05:23:00.762613+00:00",
+  "started_at": "2026-02-28T05:23:00Z",
+  "finished_at": "2026-02-28T05:23:05Z",
+  "pane_id": "%21",
+  "log_path": "/home/ryan/Apps/ai/.ai_orchestra/20260228T052223Z_e64042/logs/musicians/harp.log",
+  "result_ref": "/home/ryan/Apps/ai/.ai_orchestra/20260228T052223Z_e64042/logs/musicians/harp.log",
+  "error": null
+}

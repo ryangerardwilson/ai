@@ -20,6 +20,8 @@ from bash_executor import CommandRejected, format_command_result, run_sandboxed_
 from ai_engine_config import build_engine_settings, resolve_model
 from ai_engine_tools import (
     RendererProtocol,
+    ORCHESTRA_TOOL_DEFINITIONS,
+    ORCHESTRA_TOOL_NAMES,
     TOOL_DEFINITIONS,
     ToolRuntime,
     apply_file_update,
@@ -29,6 +31,9 @@ from ai_engine_tools import (
     instruction_implies_write,
     JFDI_REQUIRED_MESSAGE,
 )
+from orchestra_runtime import OrchestraRuntime
+from orchestra_scheduler import OrchestraScheduler
+from orchestra_tools import handle_orchestra_tool_call
 
 NEW_CONVERSATION_TOKEN = "<<NEW_CONVERSATION>>"
 
@@ -40,6 +45,9 @@ class AIEngine:
         renderer: RendererProtocol,
         config: Dict[str, Any],
         default_model: str = "gpt-5-codex",
+        mode: str = "normal",
+        orchestra_runtime: Optional[OrchestraRuntime] = None,
+        orchestra_scheduler: Optional[OrchestraScheduler] = None,
     ) -> None:
         self.renderer = renderer
         self.config = config
@@ -52,6 +60,9 @@ class AIEngine:
         self._debug_api = settings.debug_api
         self._debug_stream: TextIO = sys.stderr
         self._settings = settings
+        self.mode = mode
+        self.orchestra_runtime = orchestra_runtime
+        self.orchestra_scheduler = orchestra_scheduler
         self.jfdi_enabled: bool = False
         self.dog_whistle = (config.get("dog_whistle") or "jfdi").strip() or "jfdi"
         self._seen_writes: set[tuple[str, str]] = set()
@@ -154,19 +165,31 @@ class AIEngine:
         )
 
         dog_phrase = self.dog_whistle
-        system_prompt = textwrap.dedent(
-            f"""
-            You are Codex CLI operating locally. You can call tools to read files, write files,
-            update plans, or execute sandboxed shell commands. IMPORTANT: when you need to
-            create or modify files you MUST call the `write` tool (alias: `write_file`) with the full content (not apply_patch). Do not
-            use shell globbing to list files; prefer the dedicated `glob` tool for pattern-based listings, use `search_content` instead of shell grep for searching text, and use the todo/plan tool (`plan_update`) when a structured checklist will help (multi-step work, explicit user requests, or when you need to show progress). Track tasks with the standard states (`pending`, `in_progress`, `completed`, `cancelled`) and keep at most one item `in_progress` at a time.
-            Treat the user command `{dog_phrase}` as "just fucking do it"—the user believes you have enough context, the plan looks good, and it is time to execute without further hesitations.
-            File edits, deletions, renames, and shell commands are blocked until the user types `{dog_phrase}` in this session. Purely read-only actions (reading files, globbing, searching) are always allowed. Mention `{dog_phrase}` only when you actually need approval—don’t repeat the reminder after you’ve delivered final results.
-            claim success unless the tool call succeeds. Maintain an explicit plan when useful
-            using `update_plan`. Always cite relevant files.
-            {scope_sentence}
-            """
-        ).strip()
+        if self.mode == "orchestrator":
+            system_prompt = textwrap.dedent(
+                f"""
+                You are Codex CLI in orchestrator mode. You may call orchestration tools to compose an ensemble,
+                set musician mandates, dispatch assignments, poll or wait, collect results, and synthesize a final answer.
+                Use first-principles thinking for each new user task and redefine mandates when task intent changes.
+                The human user interacts only with you (the orchestrator), not with musicians.
+                Treat `{dog_phrase}` as execution approval for mutating operations.
+                {scope_sentence}
+                """
+            ).strip()
+        else:
+            system_prompt = textwrap.dedent(
+                f"""
+                You are Codex CLI operating locally. You can call tools to read files, write files,
+                update plans, or execute sandboxed shell commands. IMPORTANT: when you need to
+                create or modify files you MUST call the `write` tool (alias: `write_file`) with the full content (not apply_patch). Do not
+                use shell globbing to list files; prefer the dedicated `glob` tool for pattern-based listings, use `search_content` instead of shell grep for searching text, and use the todo/plan tool (`plan_update`) when a structured checklist will help (multi-step work, explicit user requests, or when you need to show progress). Track tasks with the standard states (`pending`, `in_progress`, `completed`, `cancelled`) and keep at most one item `in_progress` at a time.
+                Treat the user command `{dog_phrase}` as "just fucking do it"—the user believes you have enough context, the plan looks good, and it is time to execute without further hesitations.
+                File edits, deletions, renames, and shell commands are blocked until the user types `{dog_phrase}` in this session. Purely read-only actions (reading files, globbing, searching) are always allowed. Mention `{dog_phrase}` only when you actually need approval—don’t repeat the reminder after you’ve delivered final results.
+                claim success unless the tool call succeeds. Maintain an explicit plan when useful
+                using `update_plan`. Always cite relevant files.
+                {scope_sentence}
+                """
+            ).strip()
 
         conversation_items: List[Dict[str, Any]] = []
         plan_state: Dict[str, Any] = {"plan": None}
@@ -225,7 +248,10 @@ class AIEngine:
                 pending_user_is_repeat = False
 
             conversation_payload = cast(Any, conversation_items)
-            tools_payload = cast(Any, TOOL_DEFINITIONS)
+            tools = TOOL_DEFINITIONS
+            if self.mode == "orchestrator":
+                tools = ORCHESTRA_TOOL_DEFINITIONS
+            tools_payload = cast(Any, tools)
             tool_call_handled = False
             assistant_messages: list[tuple[str, Optional[str], str]] = []
             assistant_stream_buffers: dict[str, str] = {}
@@ -910,6 +936,18 @@ class AIEngine:
         plan_state: Dict[str, Any],
         latest_instruction: str,
     ) -> tuple[str, bool]:
+        if (
+            self.mode == "orchestrator"
+            and tool_name in ORCHESTRA_TOOL_NAMES
+            and self.orchestra_runtime is not None
+            and self.orchestra_scheduler is not None
+        ):
+            return handle_orchestra_tool_call(
+                tool_name,
+                arguments,
+                runtime=self.orchestra_runtime,
+                scheduler=self.orchestra_scheduler,
+            )
         runtime = self._build_tool_runtime(
             base_root=base_root,
             default_root=default_root,

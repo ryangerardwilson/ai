@@ -332,6 +332,22 @@ def test_search_content_fallback_skips_git_and_pycache(monkeypatch, tmp_path: Pa
     assert ".ruff_cache" not in output
 
 
+def test_instruction_implies_write_avoids_math_add_prompt():
+    assert (
+        ai_engine_tools.instruction_implies_write("how do you add 2 and 2 in python")
+        is False
+    )
+
+
+def test_instruction_implies_write_detects_file_edit_prompt():
+    assert (
+        ai_engine_tools.instruction_implies_write(
+            "update README.md to document orchestrator mode"
+        )
+        is True
+    )
+
+
 def test_plan_update_replace_sets_plan():
     renderer = DummyRenderer()
     runtime = make_runtime(renderer)

@@ -1,0 +1,148 @@
+{
+  "task_id": "task_724b8e00",
+  "user_goal": "Orchestrate and produce a compelling original drama package (core premise, character arcs, beat outline, opening scene) with strong emotional stakes and escalating conflict.",
+  "depth_profile": "deep",
+  "task_type": "creative_writing",
+  "created_at": "2026-02-28T05:13:38.260146+00:00",
+  "updated_at": "2026-02-28T05:14:41.983677+00:00",
+  "mandates": [
+    {
+      "musician": "cello",
+      "title": "Tragic Core Architect",
+      "objective": "Design the moral engine of the drama: central dilemma, irreversible choices, and thematic spine.",
+      "method": [
+        "Define protagonist wound/want/need/flaw from first principles.",
+        "Map escalating cost ladder (professional, relational, legal, existential).",
+        "Propose a final choice that resolves theme through action, not exposition."
+      ],
+      "deliverable_format": "structured_outline",
+      "evidence_requirements": [
+        "Each beat must increase stakes or force a value tradeoff.",
+        "Theme must be expressible as a conflict sentence.",
+        "Ending must create both loss and earned transformation."
+      ],
+      "non_goals": [
+        "Do not draft polished scene dialogue.",
+        "Do not add genre detours that dilute core drama."
+      ],
+      "stop_conditions": [
+        "A clear premise + dilemma + climax decision are provided.",
+        "Character arc is causally tied to plot turns."
+      ],
+      "mode": "analysis",
+      "priority": "high"
+    },
+    {
+      "musician": "harp",
+      "title": "Character Psychology Designer",
+      "objective": "Create psychologically credible principal characters with distinct voices and relational fractures.",
+      "method": [
+        "Build compact dossiers for protagonist, antagonist force, and two key supporting roles.",
+        "Specify contradiction pairs (public mask vs private fear).",
+        "Define relationship dynamics that can shift power scene-to-scene."
+      ],
+      "deliverable_format": "character_packet",
+      "evidence_requirements": [
+        "Each character has an actionable goal and hidden fear.",
+        "At least two relationships include betrayal potential.",
+        "Dialogue voice cues are concrete and differentiable."
+      ],
+      "non_goals": [
+        "Do not provide generic archetypes without specificity.",
+        "Do not over-expand cast beyond story needs."
+      ],
+      "stop_conditions": [
+        "4-5 characters are complete with arc direction and pressure points."
+      ],
+      "mode": "analysis",
+      "priority": "high"
+    },
+    {
+      "musician": "piano",
+      "title": "Structure & Beat Composer",
+      "objective": "Produce a tight 3-act beat sheet with turning points and escalation rhythm suitable for screenplay or prose drama.",
+      "method": [
+        "Set act breaks by commitment/reversal/reckoning logic.",
+        "Draft 12\u201315 beats with cause-effect continuity.",
+        "Flag midpoint reversal and dark-night collapse with clear consequences."
+      ],
+      "deliverable_format": "beat_sheet",
+      "evidence_requirements": [
+        "No beat may be redundant.",
+        "Each act changes what the protagonist believes is possible.",
+        "Climax must force choice between two valued goods."
+      ],
+      "non_goals": [
+        "Do not write full script pages.",
+        "Do not use deus ex machina resolutions."
+      ],
+      "stop_conditions": [
+        "Complete beat map from opening image to final image is delivered."
+      ],
+      "mode": "analysis",
+      "priority": "high"
+    },
+    {
+      "musician": "violin",
+      "title": "Scene Tension & Dialogue Specialist",
+      "objective": "Draft a high-grip opening scene that demonstrates subtext, conflict, and immediate stakes.",
+      "method": [
+        "Start in motion with a professional process under stress.",
+        "Embed personal history through behavior and interruption, not exposition.",
+        "End scene on a destabilizing hook."
+      ],
+      "deliverable_format": "opening_scene",
+      "evidence_requirements": [
+        "Contains at least one power shift.",
+        "Uses subtext in key exchange.",
+        "Last line/image compels continuation."
+      ],
+      "non_goals": [
+        "Do not overwrite with lyrical monologues.",
+        "Do not front-load backstory dumps."
+      ],
+      "stop_conditions": [
+        "One complete opening scene is produced with clear dramatic hook."
+      ],
+      "mode": "drafting",
+      "priority": "high"
+    },
+    {
+      "musician": "flute",
+      "title": "Audience Impact & Refinement Editor",
+      "objective": "Pressure-test originality, emotional resonance, and cohesion; propose concrete refinements.",
+      "method": [
+        "Audit for cliche risk and predictability.",
+        "Score emotional pacing across setup, midpoint, collapse, climax.",
+        "Provide targeted rewrites for weakest moments."
+      ],
+      "deliverable_format": "revision_memo",
+      "evidence_requirements": [
+        "At least 5 specific improvement notes with examples.",
+        "Identify one unique motif to unify story.",
+        "Confirm ending payoff matches premise promise."
+      ],
+      "non_goals": [
+        "Do not rewrite entire story from scratch.",
+        "Do not introduce new major subplots late."
+      ],
+      "stop_conditions": [
+        "Actionable revision memo with prioritized fixes is complete."
+      ],
+      "mode": "critique",
+      "priority": "medium"
+    }
+  ],
+  "assignment_ids": [
+    "asg_f2914ce6",
+    "asg_db349daa",
+    "asg_b361e633",
+    "asg_5d96e262",
+    "asg_13050cdc",
+    "asg_9b3d65c6",
+    "asg_1149b782",
+    "asg_17468d6c",
+    "asg_11aa604d",
+    "asg_c8485f5b"
+  ]
+}
