@@ -1,5 +1,6 @@
 from collections import deque
 from pathlib import Path
+from typing import Any
 
 import orchestra_mode
 
@@ -146,3 +147,79 @@ def test_orchestra_mode_skips_reset_when_discussing_agents(monkeypatch, tmp_path
     assert rc == 0
     assert captured["scheduler"].reset_calls == 0
     assert "do not dispatch musicians unless explicitly asked" in captured["instructions"][0]
+
+
+def test_orchestra_mode_ctrl_c_closes_excess_panes(monkeypatch, tmp_path: Path):
+    class InterruptingRenderer(DummyRenderer):
+        def __init__(self):
+            self.infos = []
+            self.errors = []
+            self.user_prompts = []
+
+        def prompt_follow_up(self):
+            raise KeyboardInterrupt
+
+    class FakeRuntime:
+        def __init__(self, repo_root):
+            self.repo_root = repo_root
+            self.run_id = "run789"
+            self.cleaned = False
+
+        def cleanup(self):
+            self.cleaned = True
+
+    class FakeTmux:
+        def __init__(self, *, session_name, repo_root):
+            self.closed = 0
+
+        def ensure_session(self):
+            return None
+
+        def focus_orchestrator_pane(self):
+            return None
+
+        def uses_current_session(self):
+            return True
+
+        def close_excess_panes(self):
+            self.closed += 1
+            return 2
+
+    class FakeScheduler:
+        def __init__(self, runtime, tmux):
+            self.runtime = runtime
+            self.tmux = tmux
+
+    class FakeEngine:
+        def __init__(self, **kwargs):
+            return None
+
+    holder: dict[str, Any] = {"runtime": None, "tmux": None}
+
+    def runtime_factory(repo_root):
+        inst = FakeRuntime(repo_root)
+        holder["runtime"] = inst
+        return inst
+
+    def tmux_factory(*, session_name, repo_root):
+        inst = FakeTmux(session_name=session_name, repo_root=repo_root)
+        holder["tmux"] = inst
+        return inst
+
+    monkeypatch.setattr(orchestra_mode, "OrchestraRuntime", runtime_factory)
+    monkeypatch.setattr(orchestra_mode, "TmuxManager", tmux_factory)
+    monkeypatch.setattr(orchestra_mode, "OrchestraScheduler", FakeScheduler)
+    monkeypatch.setattr(orchestra_mode, "AIEngine", FakeEngine)
+
+    renderer = InterruptingRenderer()
+    rc = orchestra_mode.run_orchestra_mode(
+        renderer=renderer,
+        config={"openai_api_key": "sk-1"},
+        default_model="gpt-5-codex",
+        repo_root=tmp_path,
+    )
+
+    assert rc == 130
+    assert any("Interrupted by user." in msg for msg in renderer.infos)
+    assert holder["tmux"].closed == 1
+    assert holder["runtime"].cleaned is True

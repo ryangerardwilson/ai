@@ -128,7 +128,16 @@ def run_orchestra_mode(
             rc = engine.run_conversation(instruction, None, display_prompt=False)
             if rc != 0:
                 return rc
+    except KeyboardInterrupt:
+        renderer.display_info("\nInterrupted by user.")
+        return 130
     finally:
+        close_fn = getattr(tmux, "close_excess_panes", None)
+        if callable(close_fn):
+            try:
+                close_fn()
+            except Exception:
+                pass
         cleanup_fn = getattr(runtime, "cleanup", None)
         if callable(cleanup_fn):
             cleanup_fn()
