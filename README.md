@@ -43,12 +43,12 @@ Installer flags of note:
 - `-v <x.y.z>`: install a specific tagged release (`v0.2.0`, etc.).
 - `-v` (no argument): print the latest GitHub release version.
 - `-u`: reinstall only if GitHub has something newer than your current local copy.
-- `-b /path/to/ai-linux-x64.tar.gz`: install from an already-downloaded archive.
+- `-b /path/to/ai`: install from an already-downloaded executable binary.
 - `-h`: show installer usage.
 
 You can also download the `ai-linux-x64.tar.gz` artifact manually from the
-releases page and run `install.sh --binary` if you prefer to manage the bundle
-yourself.
+releases page, extract it, and pass the extracted `ai` executable to
+`install.sh --binary`.
 
 ### From source
 
@@ -66,7 +66,7 @@ python main.py
 
 - `ai` — start a live chat session.
 - `💬 >` prompt accepts follow-ups until you press Enter on an empty line or hit `Ctrl+D`.
-- `v` (or `/v`) — open Vim (or `$EDITOR`) to draft the next prompt.
+- `v` — open Vim (or configured editor) to draft the next prompt.
 - `help` / `new` — show cheat sheet or reset context.
 - `q` / `r` — stop or retry while a response streams.
 - `jfdi` — unlock mutating model tool calls (like `write`, `write_file`, `apply_patch`, tool-driven `shell`) for the current interactive session.
@@ -84,11 +84,13 @@ python main.py
 - `ai path/to/dir '!pytest -q'` — run a sandboxed shell command with a scoped working directory.
 - `ai --read path/to/file.py --offset 400 --limit 200` — preview a file slice.
 - `ai -d` — enable debug logs.
-- `ai -v` / `ai -u` / `ai -h` — version, update, help.
+- `ai -v` / `ai --version` / `ai -V` — show version.
+- `ai -u` / `ai --upgrade` — upgrade.
+- `ai -h` / `ai --help` — help.
 
 ### What you’ll see
 
-- A multi-dot loader appears while the model is preparing a response.
+- A rotating glyph loader appears while the model is preparing a response.
 - Reasoning may stream as a dim `🤖` line (toggle with `AI_SHOW_REASONING=0`).
 - File edits show a unified diff before writing.
 
@@ -116,17 +118,17 @@ summaries, plan updates—so every action stays transparent.
 ## Configuration & Environment
 
 - `~/.config/ai/config.json` (respecting `XDG_CONFIG_HOME`) stores your OpenAI API key, dog whistle phrase, and default model.
-- On first launch `ai` asks for your OpenAI API key, then the dog whistle phrase (press Enter to keep `jfdi`), then prompts for the default model before writing the config file for you.
+- On first launch `ai` asks for your OpenAI API key, then prompts for the default model, then asks for your dog whistle phrase (press Enter to keep `jfdi`) before writing the config file.
 
 - `OPENAI_API_KEY` overrides the `openai_api_key` entry at runtime (handy for CI or shells).
 - `AI_MODEL` overrides the single `model` value.
 - `DOG_WHISTLE` overrides the approval phrase used to authorize interactive model-driven file edits and tool shell commands.
 - `AI_COLOR` adjusts the ANSI color prefix for assistant output.
-- `AI_PROMPT_EDITOR` overrides which editor `/v` and `v` use for prompt drafting.
+- `AI_PROMPT_EDITOR` overrides which editor `v` uses for prompt drafting.
 - `AI_SHOW_REASONING=0` (or `AI_SHOW_THINKING=0`) disables the live reasoning stream.
 - `AI_REASONING_EFFORT` tweaks how hard reasoning models think (`minimal`, `low`, `medium`, `high`, etc.); defaults to `medium` when reasoning is enabled.
 - `AI_DEBUG_API` (alias `AI_DEBUG_REASONING`) enables verbose OpenAI interaction logs; combine with the `-d` flag to capture them automatically.
-- `AI_BASH_MAX_SECONDS` and `AI_BASH_MAX_OUTPUT` tune shell command timeout and output caps.
+- `AI_BASH_MAX_SECONDS` and `AI_BASH_MAX_OUTPUT` tune timeout and output caps for tool-driven `shell` calls.
 - Context collection defaults are code-level constants (`read_limit` 2000, `max_bytes` 51200, listings disabled for full-repo snapshots, max 8 files per collection pass).
 - Models with the `-codex` suffix (for example `gpt-5-codex`) are Responses-only per [OpenAI's docs](https://platform.openai.com/docs/models/gpt-5-codex); `ai` automatically switches the edit workflow to the Responses API when you configure one.
 

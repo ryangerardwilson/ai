@@ -680,8 +680,11 @@ class CLIRenderer:
         self._assistant_streams[stream_id] = ""
         self._assistant_order.append(stream_id)
         if self._supports_color and sys.stdout.isatty():
-            prefix = f"{self.ANSI_MEDIUM_GRAY}🤖 > {self.ANSI_RESET}"
-            print(prefix, end="", flush=True)
+            print(
+                f"{self.ANSI_MEDIUM_GRAY}🤖 > {self.ANSI_RESET}",
+                end="",
+                flush=True,
+            )
 
     def update_assistant_stream(self, stream_id: str, delta: str) -> None:
         self.stop_loader()
@@ -707,12 +710,13 @@ class CLIRenderer:
             self._assistant_order.remove(stream_id)
         if final_text is not None and final_text != buffer:
             missing = final_text[len(buffer) :]
-            if missing and self._supports_color and sys.stdout.isatty():
-                print(
-                    f"{self.ANSI_MEDIUM_GRAY}{missing}{self.ANSI_RESET}",
-                    end="",
-                    flush=True,
-                )
+            if missing:
+                if self._supports_color and sys.stdout.isatty():
+                    print(
+                        f"{self.ANSI_MEDIUM_GRAY}{missing}{self.ANSI_RESET}",
+                        end="",
+                        flush=True,
+                    )
         if self._supports_color and sys.stdout.isatty():
             print()
 

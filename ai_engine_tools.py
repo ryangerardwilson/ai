@@ -816,7 +816,7 @@ def run_glob_search(args: Dict[str, Any], runtime: ToolRuntime) -> tuple[str, bo
 
     relative_matches = [str(path.relative_to(runtime.base_root)) for path in matches]
     header = f"Glob matches for '{pattern_str}' (showing {len(relative_matches)}):"
-    rendered = "\n".join([header, *relative_matches])
+    rendered = "\n".join([header, *relative_matches]) + "\n"
     runtime.renderer.display_info(rendered)
     return rendered, False
 
@@ -1077,7 +1077,7 @@ def run_search_content(args: Dict[str, Any], runtime: ToolRuntime) -> tuple[str,
     for item in matches:
         lines.append(f"{item['path']}:{item['line']}: {item['text']}")
 
-    rendered = "\n".join(lines)
+    rendered = "\n".join(lines) + "\n"
     runtime.renderer.display_info(rendered)
     return rendered, False
 
