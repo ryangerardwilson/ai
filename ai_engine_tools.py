@@ -270,6 +270,18 @@ READONLY_TOOL_DEFINITIONS = [
     tool for tool in TOOL_DEFINITIONS if tool.get("name") in READONLY_TOOL_NAMES
 ]
 
+IGNORED_PATH_NAMES = {".git", "__pycache__", ".ruff_cache", "ruff_cache"}
+DEFAULT_SEARCH_EXCLUDES = [
+    ".git/**",
+    "**/.git/**",
+    "__pycache__/**",
+    "**/__pycache__/**",
+    ".ruff_cache/**",
+    "**/.ruff_cache/**",
+    "ruff_cache/**",
+    "**/ruff_cache/**",
+]
+
 JFDI_REQUIRED_MESSAGE = "blocked: jfdi approval required"
 
 
@@ -400,6 +412,14 @@ def parse_arguments(arguments: Any, tool_name: str) -> Dict[str, Any]:
     if isinstance(arguments, dict):
         return arguments
     return {}
+
+
+def is_ignored_path(path: Path, root: Path) -> bool:
+    try:
+        relative = path.relative_to(root)
+    except ValueError:
+        relative = path
+    return any(part in IGNORED_PATH_NAMES for part in relative.parts)
 
 
 def handle_tool_call(
@@ -783,6 +803,8 @@ def run_glob_search(args: Dict[str, Any], runtime: ToolRuntime) -> tuple[str, bo
             candidate_path.relative_to(runtime.base_root)
         except ValueError:
             continue
+        if is_ignored_path(candidate_path, runtime.base_root):
+            continue
         matches.append(candidate_path)
         if len(matches) >= limit:
             break
@@ -888,6 +910,8 @@ def run_search_content(args: Dict[str, Any], runtime: ToolRuntime) -> tuple[str,
     for pattern_text in include_patterns:
         command_parts.extend(["-g", pattern_text])
     for pattern_text in exclude_patterns:
+        command_parts.extend(["-g", f"!{pattern_text}"])
+    for pattern_text in DEFAULT_SEARCH_EXCLUDES:
         command_parts.extend(["-g", f"!{pattern_text}"])
     command_parts.extend(["-m", str(max_results)])
     command_parts.append(pattern)
@@ -1003,6 +1027,8 @@ def run_search_content(args: Dict[str, Any], runtime: ToolRuntime) -> tuple[str,
 
         for file_path in search_root.rglob("*"):
             if not file_path.is_file():
+                continue
+            if is_ignored_path(file_path, runtime.base_root):
                 continue
             try:
                 relative = file_path.relative_to(runtime.base_root)

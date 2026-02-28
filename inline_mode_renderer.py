@@ -8,7 +8,12 @@ from typing import Any, Dict, List, Optional, TextIO
 import openai
 
 from ai_engine_config import build_engine_settings, resolve_model
-from ai_engine_tools import TOOL_DEFINITIONS, ToolRuntime, handle_tool_call
+from ai_engine_tools import (
+    TOOL_DEFINITIONS,
+    ToolRuntime,
+    handle_tool_call,
+    instruction_implies_write,
+)
 from contextualizer import (
     DEFAULT_READ_LIMIT,
     MAX_READ_BYTES,
@@ -42,9 +47,14 @@ class InlineModeRenderer:
 
     def run(self, *, prompt: str, scopes: List[Path]) -> int:
         raw_prompt = (prompt or "").strip()
+        raw_prompt = self._strip_leading_phrase(
+            raw_prompt, str(self.config.get("dog_whistle") or "jfdi")
+        )
         if not raw_prompt:
             self.renderer.display_error("Inline prompt cannot be empty.")
             return 1
+
+        requires_file_edit = instruction_implies_write(raw_prompt)
 
         self.renderer.display_user_prompt(raw_prompt)
 
@@ -73,6 +83,8 @@ class InlineModeRenderer:
         system_prompt = (
             "You are Codex CLI inline mode. Provide a single, self-contained answer. "
             "You can call tools to read files, write files, update plans, or execute sandboxed shell commands. "
+            "If the task asks to change files, you must use write/write_file/apply_patch to actually make the change. "
+            "Never claim files were changed unless a mutating tool call succeeded. "
             "Do not ask follow-up questions; complete the requested task and exit."
         )
 
@@ -114,6 +126,7 @@ class InlineModeRenderer:
                 return 1
 
             tool_calls = 0
+            mutation_applied = False
             assistant_messages: List[str] = []
             pending_reasoning_queue: List[Dict[str, Any]] = []
 
@@ -142,11 +155,12 @@ class InlineModeRenderer:
                             raw_id=raw_item_id,
                         )
                     )
-                    result_text, _ = handle_tool_call(
+                    result_text, mutated = handle_tool_call(
                         tool_name, arguments_payload, runtime
                     )
+                    mutation_applied = mutation_applied or mutated
                     conversation_items.append(
-                        self._make_tool_result_message(call_id, "ok")
+                        self._make_tool_result_message(call_id, result_text)
                     )
                     tool_calls += 1
                 elif item_type == "reasoning":
@@ -163,6 +177,11 @@ class InlineModeRenderer:
             pending_reasoning_queue.clear()
 
             if tool_calls:
+                if requires_file_edit and not mutation_applied:
+                    self.renderer.display_error(
+                        "No file changes were applied. The model must call a mutating tool for edit requests."
+                    )
+                    return 1
                 if assistant_messages:
                     self.renderer.display_assistant_message(assistant_messages[-1])
                 else:
@@ -170,6 +189,11 @@ class InlineModeRenderer:
                 return 0
 
             if assistant_messages:
+                if requires_file_edit:
+                    self.renderer.display_error(
+                        "No file changes were applied. The model answered without using a mutating tool."
+                    )
+                    return 1
                 self.renderer.display_assistant_message(assistant_messages[-1])
                 return 0
 
@@ -332,6 +356,26 @@ class InlineModeRenderer:
         if raw_id is not None:
             item["id"] = str(raw_id)
         return item
+
+    @staticmethod
+    def _strip_leading_phrase(text: str, phrase: str) -> str:
+        candidate = (text or "").strip()
+        marker = (phrase or "").strip()
+        if not candidate or not marker:
+            return candidate
+
+        lower_candidate = candidate.lower()
+        lower_marker = marker.lower()
+        if not lower_candidate.startswith(lower_marker):
+            return candidate
+
+        if len(candidate) > len(marker):
+            boundary = candidate[len(marker)]
+            if boundary.isalnum() or boundary == "_":
+                return candidate
+
+        remainder = candidate[len(marker) :].lstrip(" \t:,-")
+        return remainder
 
 
 __all__ = ["InlineModeRenderer"]

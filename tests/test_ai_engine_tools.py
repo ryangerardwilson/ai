@@ -191,6 +191,29 @@ def test_glob_search_respects_limit(tmp_path: Path):
     assert len(lines) == 2
 
 
+def test_glob_search_omits_git_and_pycache(tmp_path: Path):
+    renderer = DummyRenderer()
+    root = tmp_path
+    (root / ".git" / "hooks").mkdir(parents=True)
+    (root / ".git" / "hooks" / "pre-commit.sample").write_text("sample")
+    (root / "pkg" / "__pycache__").mkdir(parents=True)
+    (root / "pkg" / "__pycache__" / "mod.cpython-311.pyc").write_text("x")
+    (root / ".ruff_cache").mkdir()
+    (root / ".ruff_cache" / "cache.json").write_text("x")
+    (root / "src").mkdir()
+    (root / "src" / "main.py").write_text("print('ok')")
+
+    runtime = make_runtime(renderer, root=root)
+
+    output, mutated = ai_engine_tools.run_glob_search({"pattern": "**/*"}, runtime)
+
+    assert mutated is False
+    assert "src/main.py" in output
+    assert ".git/hooks/pre-commit.sample" not in output
+    assert "__pycache__" not in output
+    assert ".ruff_cache" not in output
+
+
 def test_glob_search_rejects_outside_cwd(tmp_path: Path):
     renderer = DummyRenderer()
     runtime = make_runtime(renderer, root=tmp_path)
@@ -281,6 +304,32 @@ def test_search_content_no_matches(monkeypatch, tmp_path: Path):
 
     assert mutated is False
     assert message.startswith("Search pattern 'missing' returned no matches")
+
+
+def test_search_content_fallback_skips_git_and_pycache(monkeypatch, tmp_path: Path):
+    renderer = DummyRenderer()
+    runtime = make_runtime(renderer, root=tmp_path)
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".git" / "HEAD").write_text("token")
+    (tmp_path / "pkg" / "__pycache__").mkdir(parents=True)
+    (tmp_path / "pkg" / "__pycache__" / "cache.py").write_text("token")
+    (tmp_path / ".ruff_cache").mkdir()
+    (tmp_path / ".ruff_cache" / "cache.py").write_text("token")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "ok.py").write_text("token = 1\n")
+
+    def fake_run(*args, **kwargs):
+        raise ai_engine_tools.CommandRejected("not allowed")
+
+    monkeypatch.setattr(ai_engine_tools, "run_sandboxed_bash", fake_run)
+
+    output, mutated = ai_engine_tools.run_search_content({"pattern": "token"}, runtime)
+
+    assert mutated is False
+    assert "src/ok.py:1" in output
+    assert ".git/HEAD" not in output
+    assert "__pycache__" not in output
+    assert ".ruff_cache" not in output
 
 
 def test_plan_update_replace_sets_plan():

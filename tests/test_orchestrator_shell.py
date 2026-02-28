@@ -176,12 +176,23 @@ def test_interactive_flow_without_args(monkeypatch, orchestrator_factory):
     assert engine.last_conversation == ("review README for typos", None, False)
 
 
-def test_inline_prompt_arguments_rejected(orchestrator_factory):
+def test_inline_prompt_arguments_run_inline_mode(monkeypatch, orchestrator_factory):
     orch, renderer, _ = orchestrator_factory()
+
+    captured = {}
+
+    def fake_run_inline_prompt(*, prompt, scopes, renderer, config, default_model):
+        captured["prompt"] = prompt
+        captured["scopes"] = scopes
+        captured["default_model"] = default_model
+        return 0
+
+    monkeypatch.setattr(orchestrator, "run_inline_prompt", fake_run_inline_prompt)
 
     rc = orch.run(["how", "are", "you?"])
 
-    assert rc == 1
-    assert any(
-        "Inline prompts are no longer supported" in msg for msg in renderer.errors
-    )
+    assert rc == 0
+    assert captured["prompt"] == "how are you?"
+    assert captured["scopes"] == []
+    assert captured["default_model"] == "test-model"
+    assert renderer.errors == []

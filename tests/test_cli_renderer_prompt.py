@@ -139,3 +139,19 @@ def test_assistant_stream(capsys):
 
     out = capsys.readouterr().out
     assert out == ""
+
+
+def test_format_diff_uses_visible_placeholders_for_missing_line_numbers():
+    renderer = CLIRenderer()
+    diff_lines = [
+        "--- x.py",
+        "+++ x.py (proposed)",
+        "@@ -1 +1 @@",
+        "-port panda as peedee",
+        "+import pandas as pd",
+    ]
+
+    formatted = renderer._format_diff(diff_lines)
+
+    assert "   1    . | -port panda as peedee" in formatted
+    assert "   .    1 | +import pandas as pd" in formatted

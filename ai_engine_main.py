@@ -62,6 +62,25 @@ class AIEngine:
             return False
         return needle in text.lower()
 
+    def _extract_instruction_after_dog_whistle(self, text: str) -> tuple[bool, str]:
+        phrase = self.dog_whistle.strip()
+        candidate = (text or "").strip()
+        if not phrase or not candidate:
+            return False, candidate
+
+        lower_candidate = candidate.lower()
+        lower_phrase = phrase.lower()
+        if not lower_candidate.startswith(lower_phrase):
+            return False, candidate
+
+        if len(candidate) > len(phrase):
+            boundary = candidate[len(phrase)]
+            if boundary.isalnum() or boundary == "_":
+                return False, candidate
+
+        remainder = candidate[len(phrase) :].lstrip(" \t:,-")
+        return True, remainder
+
     def _api_debug(self, message: str) -> None:
         if self._debug_api:
             print(f"[openai-debug] {message}", file=self._debug_stream)
@@ -85,10 +104,19 @@ class AIEngine:
         self.jfdi_enabled = False
         self._seen_writes.clear()
 
-        if self._matches_dog_whistle(raw_prompt):
+        dog_whistle_used, raw_prompt = self._extract_instruction_after_dog_whistle(
+            raw_prompt
+        )
+        approval_note: Optional[str] = None
+        if dog_whistle_used:
             self.jfdi_enabled = True
             self.renderer.display_info("Mutating tools enabled. Ready when you are.")
-            return 0
+            approval_note = (
+                f"Approval: user already typed `{self.dog_whistle}`. "
+                "Mutating tools are enabled for this session."
+            )
+            if not raw_prompt:
+                return 0
 
         repo_root = Path.cwd().resolve()
         context_settings = self.config.get("context_settings", {})
@@ -143,17 +171,18 @@ class AIEngine:
         conversation_items: List[Dict[str, Any]] = []
         plan_state: Dict[str, Any] = {"plan": None}
         latest_instruction = raw_prompt
-        pending_user_message: Optional[str] = "\n".join(
+        pending_lines = ["Repository snapshot:", prompt_context, ""]
+        if approval_note:
+            pending_lines.extend([approval_note, ""])
+        pending_lines.extend(
             [
-                "Repository snapshot:",
-                prompt_context,
-                "",
                 "Task:",
                 raw_prompt,
                 "",
-                "If files must change, call `write` (or `write_file`) with the full content and wait for confirmation.",
+                "If files must change, call `write` (or `write_file`) with the full content.",
             ]
         )
+        pending_user_message: Optional[str] = "\n".join(pending_lines)
         pending_context_update: Optional[str] = None
         context_dirty = False
         warned_no_write = False
@@ -485,7 +514,7 @@ class AIEngine:
                             latest_instruction=latest_instruction,
                         )
                         conversation_items.append(
-                            self._make_tool_result_message(call_id, "ok")
+                            self._make_tool_result_message(call_id, result_text)
                         )
                         if result_text == JFDI_REQUIRED_MESSAGE:
                             self._inform_mutation_blocked(conversation_items)
@@ -544,23 +573,34 @@ class AIEngine:
                     warned_no_write = True
                     continue
 
+            if tool_call_handled:
+                continue
+
             follow_up = self.renderer.prompt_follow_up()
             if follow_up is None:
                 return 0
             follow_up = follow_up.strip()
-            if self._matches_dog_whistle(follow_up):
+            dog_whistle_used, follow_up = self._extract_instruction_after_dog_whistle(
+                follow_up
+            )
+            if dog_whistle_used:
                 self.jfdi_enabled = True
                 self.renderer.display_info(
                     "Mutating tools enabled. Ready when you are."
                 )
-                pending_user_message = (
-                    "Follow-up instruction:\n"
-                    f"User typed `{self.dog_whistle}`, signaling approval to execute the existing plan. Proceed accordingly."
+                if not follow_up:
+                    pending_user_message = (
+                        "Follow-up instruction:\n"
+                        f"User typed `{self.dog_whistle}`, signaling approval to execute the existing plan. Proceed accordingly."
+                    )
+                    latest_instruction = "jfdi approval"
+                    pending_user_is_repeat = False
+                    skip_model_request = False
+                    continue
+                follow_up = (
+                    f"Approval: user already typed `{self.dog_whistle}`. "
+                    "Mutating tools are enabled.\n" + follow_up
                 )
-                latest_instruction = "jfdi approval"
-                pending_user_is_repeat = False
-                skip_model_request = False
-                continue
             if follow_up == NEW_CONVERSATION_TOKEN:
                 self._api_debug("conversation reset requested")
                 conversation_items.clear()

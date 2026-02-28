@@ -11,10 +11,18 @@ and versioning.
   later.
 - Minimal, opinionated workflow trims noise and keeps every run focused on
   shipping the next concrete change.
-- Git safeguards stage changes for you and refuse to auto-commit, so the AI
-  never hijacks version control.
+- Git safety by default: sandbox rules block dangerous operations (including
+  `git add`/`git commit`/`git push`) and the assistant never auto-commits for
+  you.
 
 ---
+
+## How is this better than OpenAI Codex / OpenCode?
+
+- No agentic detours. One model, one request, one response—no multi-agent theater.
+- Dog whistle control for mutating model tool calls in interactive chat: no whistle, no file mutation.
+- CLI-first on purpose. No TUI, no shortcut maze—inline mode and chat mode play nicely with tmux.
+- Low cognitive load. Minimal UI, fast startup, no persistent chat history beyond the session, so it stays as snappy as vanilla Vim.
 
 ## Installation
 
@@ -58,10 +66,11 @@ python main.py
 
 - `ai` — start a live chat session.
 - `💬 >` prompt accepts follow-ups until you press Enter on an empty line or hit `Ctrl+D`.
-- `v` — open Vim (or `$EDITOR`) to draft the next prompt.
+- `v` (or `/v`) — open Vim (or `$EDITOR`) to draft the next prompt.
 - `help` / `new` — show cheat sheet or reset context.
 - `q` / `r` — stop or retry while a response streams.
-- `jfdi` — unlock file writes and shell commands for the current session.
+- `jfdi` — unlock mutating model tool calls (like `write`, `write_file`, `apply_patch`, tool-driven `shell`) for the current interactive session.
+- `!command` in chat runs immediately through the sandboxed shell executor.
 
 ### Inline mode
 
@@ -72,6 +81,7 @@ python main.py
 ### Utilities
 
 - `ai '!pytest -q'` — run a sandboxed shell command.
+- `ai path/to/dir '!pytest -q'` — run a sandboxed shell command with a scoped working directory.
 - `ai --read path/to/file.py --offset 400 --limit 200` — preview a file slice.
 - `ai -d` — enable debug logs.
 - `ai -v` / `ai -u` / `ai -h` — version, update, help.
@@ -84,7 +94,7 @@ python main.py
 
 ## Tool Suite
 
-- `read_file` / `write` / `apply_patch` — precise file IO primitives that surface diffs and require approval before anything is persisted.
+- `read_file` / `write` / `write_file` / `apply_patch` — precise file IO primitives; prefer `write`/`write_file` with full file contents for edits.
 - `glob` — repo-scoped file discovery powered by pattern matching (`src/**/*.py`, `tests/**/*_spec.py`, etc.).
 - `search_content` — ripgrep-backed content search that returns `path:line:text` snippets right in the transcript.
 - `shell` — sandboxed command runner (`!pytest`, `!ls src`) constrained to the repo root with output automatically attached to the conversation.
@@ -97,8 +107,8 @@ summaries, plan updates—so every action stays transparent.
 ### Why a Single-Agent + Dog-Whistle Flow?
 
 - **One brain beats a committee.** Rather than juggling planner/builder/runner bots, a single assistant carries full context from plan to execution.
-- **User-controlled execution.** Your dog whistle phrase (default `jfdi`, but feel free to use `ship it`, `make it so`, `hakuna matata`) becomes the explicit “go” signal. Until you say it, nothing mutates.
-- **Transparent guardrails.** When a tool is blocked, the assistant tells you exactly why and reminds you of the phrase—no rummaging through agent logs.
+- **User-controlled execution.** Your dog whistle phrase (default `jfdi`, but feel free to use `ship it`, `make it so`, `hakuna matata`) is the explicit “go” signal for interactive, model-initiated mutations.
+- **Transparent guardrails.** When a mutating tool is blocked, the assistant tells you exactly why and reminds you of the phrase—no rummaging through agent logs.
 - **Easy to customize.** Teams can pick a phrase that fits their culture; set it once in config or via `DOG_WHISTLE` and keep the workflow playful *and* safe.
 
 ---
@@ -110,17 +120,18 @@ summaries, plan updates—so every action stays transparent.
 
 - `OPENAI_API_KEY` overrides the `openai_api_key` entry at runtime (handy for CI or shells).
 - `AI_MODEL` overrides the single `model` value.
-- `DOG_WHISTLE` overrides the approval phrase used to authorize file edits and shell commands.
+- `DOG_WHISTLE` overrides the approval phrase used to authorize interactive model-driven file edits and tool shell commands.
 - `AI_COLOR` adjusts the ANSI color prefix for assistant output.
+- `AI_PROMPT_EDITOR` overrides which editor `/v` and `v` use for prompt drafting.
 - `AI_SHOW_REASONING=0` (or `AI_SHOW_THINKING=0`) disables the live reasoning stream.
 - `AI_REASONING_EFFORT` tweaks how hard reasoning models think (`minimal`, `low`, `medium`, `high`, etc.); defaults to `medium` when reasoning is enabled.
 - `AI_DEBUG_API` (alias `AI_DEBUG_REASONING`) enables verbose OpenAI interaction logs; combine with the `-d` flag to capture them automatically.
 - `AI_BASH_MAX_SECONDS` and `AI_BASH_MAX_OUTPUT` tune shell command timeout and output caps.
-- Context window defaults (`read_limit` 2000, `max_bytes` 51200, listings disabled) are hard-coded; directory inventories never ship in the prompt.
+- Context collection defaults are code-level constants (`read_limit` 2000, `max_bytes` 51200, listings disabled for full-repo snapshots, max 8 files per collection pass).
 - Models with the `-codex` suffix (for example `gpt-5-codex`) are Responses-only per [OpenAI's docs](https://platform.openai.com/docs/models/gpt-5-codex); `ai` automatically switches the edit workflow to the Responses API when you configure one.
 
-The application stores temporary chat buffers in `/tmp/chat_history_*.txt`.
-Killing the process with `Ctrl+C` cleans up any remaining scratch files.
+Prompt drafting in editor mode uses temporary files in `/tmp` and removes them
+on completion.
 
 ---
 

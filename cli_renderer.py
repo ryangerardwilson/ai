@@ -27,6 +27,7 @@ class CLIRenderer:
     """Console renderer for the ai CLI."""
 
     ANSI_WHITE = "\033[97m"
+    ANSI_LIGHT_GRAY = "\033[38;5;250m"
     ANSI_MEDIUM_GRAY = "\033[38;5;245m"
     ANSI_DIM_GRAY = "\033[90m"
     ANSI_DARKER_GRAY = "\033[38;5;240m"
@@ -187,7 +188,12 @@ class CLIRenderer:
     # ------------------------------------------------------------------
     def display_info(self, text: str) -> None:
         if text:
-            print(self._colorize(text, self.ANSI_MEDIUM_GRAY))
+            color = (
+                self.ANSI_DARKER_GRAY
+                if self._is_search_info(text)
+                else self.ANSI_MEDIUM_GRAY
+            )
+            print(self._colorize(text, color))
 
     def display_error(self, text: str) -> None:
         if text:
@@ -203,7 +209,12 @@ class CLIRenderer:
     def display_assistant_message(self, text: str) -> None:
         if text:
             prefix = "🤖 > "
-            print(self._colorize(prefix + text, self.ANSI_MEDIUM_GRAY))
+            tone = (
+                self.ANSI_LIGHT_GRAY
+                if text.strip().startswith("**")
+                else self.ANSI_MEDIUM_GRAY
+            )
+            print(self._colorize(prefix + text, tone))
 
     def display_shell_output(self, text: str) -> None:
         if text:
@@ -478,7 +489,9 @@ class CLIRenderer:
                 old_no += 1
                 new_no += 1
 
-            line_with_numbers = f"{old_label:>6} {new_label:>6} {line}"
+            old_display = old_label or "."
+            new_display = new_label or "."
+            line_with_numbers = f"{old_display:>4} {new_display:>4} | {line}"
 
             if colorize and prefix:
                 if prefix == "+":
@@ -509,6 +522,11 @@ class CLIRenderer:
                 tag = f"{self.ANSI_DIM_GRAY}{tag}{self.ANSI_RESET}"
         body = f"{prefix}{path}"
         return f"{tag} {body}{suffix}" if suffix else f"{tag} {body}"
+
+    def _is_search_info(self, text: str) -> bool:
+        return text.startswith("Search results for '") or text.startswith(
+            "Glob matches for '"
+        )
 
     def _colorize(self, text: str, color: str) -> str:
         if not text or not self._supports_color:

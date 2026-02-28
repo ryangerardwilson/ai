@@ -130,6 +130,8 @@ class DummyRenderer:
         self.assistant_stream_chunks: list[str] = []
         self.assistant_stream_final: str | None = None
         self.hotkey_events = deque()
+        self.follow_ups = deque()
+        self.follow_up_calls = 0
 
     def display_info(self, text: str) -> None:
         self.infos.append(text)
@@ -159,6 +161,9 @@ class DummyRenderer:
         return None
 
     def prompt_follow_up(self):
+        self.follow_up_calls += 1
+        if self.follow_ups:
+            return self.follow_ups.popleft()
         return None
 
     def prompt_confirm(self, prompt: str, *, default_no: bool = True) -> bool:
@@ -343,3 +348,190 @@ def test_dog_whistle_custom_phrase(monkeypatch):
     assert rc == 0
     assert engine.jfdi_enabled is True
     assert any("Mutating tools enabled" in msg for msg in renderer.infos)
+
+
+def test_tool_result_round_trips_in_function_call_output(monkeypatch):
+    class FunctionCallItem(SimpleNamespace):
+        def model_dump(self):
+            return {
+                "type": "function_call",
+                "id": "tool_1",
+                "call_id": "call_1",
+                "name": "read_file",
+                "arguments": '{"path": "README.md", "offset": 0, "limit": 20}',
+            }
+
+    first_response = SimpleNamespace(
+        output=[
+            FunctionCallItem(
+                type="function_call",
+                id="tool_1",
+                call_id="call_1",
+                name="read_file",
+                arguments='{"path": "README.md", "offset": 0, "limit": 20}',
+            )
+        ]
+    )
+    second_response = SimpleNamespace(
+        output=[
+            SimpleNamespace(
+                type="message",
+                id="msg_2",
+                content=[SimpleNamespace(type="output_text", text="done")],
+            )
+        ]
+    )
+
+    request_inputs = []
+    stream_count = {"count": 0}
+
+    class CapturingResponses:
+        def stream(self, **kwargs):
+            request_inputs.append(kwargs.get("input"))
+            stream_count["count"] += 1
+            if stream_count["count"] == 1:
+                return DummyStream(
+                    [
+                        SimpleNamespace(
+                            type="response.completed", response=first_response
+                        )
+                    ],
+                    first_response,
+                )
+            return DummyStream(
+                [SimpleNamespace(type="response.completed", response=second_response)],
+                second_response,
+            )
+
+    class CapturingClient:
+        def __init__(self):
+            self.responses = CapturingResponses()
+
+    monkeypatch.setattr(ai_engine.openai, "OpenAI", lambda **kwargs: CapturingClient())
+
+    renderer = DummyRenderer()
+    engine = ai_engine.AIEngine(renderer=renderer, config={"openai_api_key": "sk-1"})
+
+    rc = engine.run_conversation("read then answer", None)
+
+    assert rc == 0
+    assert stream_count["count"] == 2
+    assert renderer.follow_up_calls == 1
+    second_input = request_inputs[1]
+    function_outputs = [
+        item
+        for item in second_input
+        if isinstance(item, dict) and item.get("type") == "function_call_output"
+    ]
+    assert function_outputs
+    assert function_outputs[-1]["call_id"] == "call_1"
+    assert function_outputs[-1]["output"] != "ok"
+    assert "Contents of" in function_outputs[-1]["output"]
+
+
+def test_jfdi_prefixed_instruction_continues(monkeypatch):
+    final_response = SimpleNamespace(
+        output=[
+            SimpleNamespace(
+                type="message",
+                id="msg_1",
+                content=[SimpleNamespace(type="output_text", text="Applied")],
+            )
+        ]
+    )
+
+    captured_inputs = []
+
+    class CapturingResponses:
+        def stream(self, **kwargs):
+            captured_inputs.append(kwargs.get("input"))
+            return DummyStream(
+                [SimpleNamespace(type="response.completed", response=final_response)],
+                final_response,
+            )
+
+    class CapturingClient:
+        def __init__(self):
+            self.responses = CapturingResponses()
+
+    monkeypatch.setattr(ai_engine.openai, "OpenAI", lambda **kwargs: CapturingClient())
+
+    renderer = DummyRenderer()
+    engine = ai_engine.AIEngine(renderer=renderer, config={"openai_api_key": "sk-1"})
+
+    rc = engine.run_conversation("jfdi fix X", None)
+
+    assert rc == 0
+    assert engine.jfdi_enabled is True
+    assert captured_inputs
+    first_payload = captured_inputs[0][0]["content"][0]["text"]
+    assert "Approval: user already typed `jfdi`" in first_payload
+    assert "Task:\nfix X" in first_payload
+
+
+def test_tool_call_turn_continues_without_user_follow_up(monkeypatch):
+    class ToolCallItem(SimpleNamespace):
+        def model_dump(self):
+            return {
+                "type": "tool_call",
+                "id": "tool_1",
+                "call_id": "call_1",
+                "name": "plan_update",
+                "arguments": '{"todos":[{"id":"t1","content":"review","status":"pending"}]}',
+            }
+
+    first_response = SimpleNamespace(
+        output=[
+            ToolCallItem(
+                type="tool_call",
+                id="tool_1",
+                call_id="call_1",
+                name="plan_update",
+                arguments='{"todos":[{"id":"t1","content":"review","status":"pending"}]}',
+            )
+        ]
+    )
+    second_response = SimpleNamespace(
+        output=[
+            SimpleNamespace(
+                type="message",
+                id="msg_2",
+                content=[SimpleNamespace(type="output_text", text="Done")],
+            )
+        ]
+    )
+
+    stream_count = {"count": 0}
+
+    class CapturingResponses:
+        def stream(self, **_kwargs):
+            stream_count["count"] += 1
+            if stream_count["count"] == 1:
+                return DummyStream(
+                    [
+                        SimpleNamespace(
+                            type="response.completed", response=first_response
+                        )
+                    ],
+                    first_response,
+                )
+            return DummyStream(
+                [SimpleNamespace(type="response.completed", response=second_response)],
+                second_response,
+            )
+
+    class CapturingClient:
+        def __init__(self):
+            self.responses = CapturingResponses()
+
+    monkeypatch.setattr(ai_engine.openai, "OpenAI", lambda **kwargs: CapturingClient())
+
+    renderer = DummyRenderer()
+    engine = ai_engine.AIEngine(renderer=renderer, config={"openai_api_key": "sk-1"})
+
+    rc = engine.run_conversation("make a plan then finish", None)
+
+    assert rc == 0
+    assert stream_count["count"] == 2
+    assert renderer.follow_up_calls == 1
+    assert renderer.assistant_messages == ["Done"]
