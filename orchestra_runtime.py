@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import secrets
+import shutil
+import tempfile
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -36,7 +38,11 @@ class AssignmentRecord:
 class OrchestraRuntime:
     def __init__(self, repo_root: Path, state_root: Optional[Path] = None) -> None:
         self.repo_root = repo_root.resolve()
-        base = state_root.resolve() if state_root else (self.repo_root / ".ai_orchestra")
+        self._ephemeral = state_root is None
+        if state_root is None:
+            base = Path(tempfile.gettempdir()) / "ai_orchestra"
+        else:
+            base = state_root.resolve()
         self.state_root = base
         self.run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "_" + secrets.token_hex(3)
         self.run_dir = self.state_root / self.run_id
@@ -51,6 +57,14 @@ class OrchestraRuntime:
 
         self._ensure_dirs()
         self._persist_run_state()
+
+    def cleanup(self) -> None:
+        if not self._ephemeral:
+            return
+        try:
+            shutil.rmtree(self.run_dir)
+        except FileNotFoundError:
+            return
 
     def _ensure_dirs(self) -> None:
         self.run_dir.mkdir(parents=True, exist_ok=True)

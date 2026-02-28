@@ -92,38 +92,43 @@ def run_orchestra_mode(
         "Orchestrator mode started. Define mandates, dispatch musicians, and synthesize results."
     )
 
-    while True:
-        instruction = renderer.prompt_follow_up()
-        if instruction is None:
-            return 0
-        instruction = instruction.strip()
-        if not instruction:
-            renderer.display_info("Provide an orchestration instruction or press Ctrl+D.")
-            continue
-        if instruction == NEW_CONVERSATION_TOKEN:
-            renderer.display_info("Starting a fresh orchestration turn.")
-            continue
-        user_instruction = instruction
-        if _is_agent_planning_discussion(user_instruction):
-            instruction = (
-                "The user is discussing which musicians/agents should be spawned. "
-                "For this turn, discuss recommendations only and do not dispatch musicians unless explicitly asked to execute.\n\n"
-                + user_instruction
-            )
-        else:
-            reset = scheduler.reset_for_new_task()
-            if reset.get("closed_panes") or reset.get("cancelled_assignments"):
-                renderer.display_info(
-                    "Reset previous musicians: "
-                    f"closed {reset.get('closed_panes', 0)} panes, "
-                    f"cancelled {reset.get('cancelled_assignments', 0)} assignments."
+    try:
+        while True:
+            instruction = renderer.prompt_follow_up()
+            if instruction is None:
+                return 0
+            instruction = instruction.strip()
+            if not instruction:
+                renderer.display_info("Provide an orchestration instruction or press Ctrl+D.")
+                continue
+            if instruction == NEW_CONVERSATION_TOKEN:
+                renderer.display_info("Starting a fresh orchestration turn.")
+                continue
+            user_instruction = instruction
+            if _is_agent_planning_discussion(user_instruction):
+                instruction = (
+                    "The user is discussing which musicians/agents should be spawned. "
+                    "For this turn, discuss recommendations only and do not dispatch musicians unless explicitly asked to execute.\n\n"
+                    + user_instruction
                 )
-            instruction = (
-                "For this task, you must spawn a fresh musician ensemble. "
-                "Compose mandates, dispatch musicians, collect outputs, then synthesize.\n\n"
-                + user_instruction
-            )
-        renderer.display_user_prompt(user_instruction)
-        rc = engine.run_conversation(instruction, None, display_prompt=False)
-        if rc != 0:
-            return rc
+            else:
+                reset = scheduler.reset_for_new_task()
+                if reset.get("closed_panes") or reset.get("cancelled_assignments"):
+                    renderer.display_info(
+                        "Reset previous musicians: "
+                        f"closed {reset.get('closed_panes', 0)} panes, "
+                        f"cancelled {reset.get('cancelled_assignments', 0)} assignments."
+                    )
+                instruction = (
+                    "For this task, you must spawn a fresh musician ensemble. "
+                    "Compose mandates, dispatch musicians, collect outputs, then synthesize.\n\n"
+                    + user_instruction
+                )
+            renderer.display_user_prompt(user_instruction)
+            rc = engine.run_conversation(instruction, None, display_prompt=False)
+            if rc != 0:
+                return rc
+    finally:
+        cleanup_fn = getattr(runtime, "cleanup", None)
+        if callable(cleanup_fn):
+            cleanup_fn()

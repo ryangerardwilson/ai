@@ -3,4 +3,5 @@
 *.log
 .ruff_cache
 .pytest_cache
+.ai_orchestra
 opencode

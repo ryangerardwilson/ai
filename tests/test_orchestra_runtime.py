@@ -83,3 +83,12 @@ def test_runtime_rejects_invalid_or_duplicate_musicians(tmp_path: Path):
                 },
             ],
         )
+
+
+def test_runtime_default_state_is_ephemeral_and_cleanup_removes_run_dir(tmp_path: Path):
+    runtime = OrchestraRuntime(repo_root=tmp_path)
+    run_dir = runtime.run_dir
+    assert run_dir.exists()
+    assert run_dir.parent != tmp_path / ".ai_orchestra"
+    runtime.cleanup()
+    assert not run_dir.exists()
