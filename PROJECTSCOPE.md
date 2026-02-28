@@ -11,14 +11,28 @@
 - **Minimal runtime surface** – Runtime dependency is the OpenAI Python SDK plus stdlib modules. ([requirements.txt](requirements.txt), [orchestrator.py](orchestrator.py), [ai_engine_main.py](ai_engine_main.py))
 
 ## 3. Primary Workflows
-| Flow | Invocation Example | Description | Key Sources |
-| --- | --- | --- | --- |
-| Interactive conversation | `ai` | Starts prompt loop (`💬 >`), runs Responses streaming, supports `help`, `new`, `v`, and in-chat `!command`. | [orchestrator.py](orchestrator.py), [ai_engine_main.py](ai_engine_main.py), [cli_renderer.py](cli_renderer.py) |
-| Inline one-shot | `ai "explain this repo"` | Single-request mode with no follow-up loop. | [inline_prompt_mode.py](inline_prompt_mode.py), [inline_mode_renderer.py](inline_mode_renderer.py) |
-| Scoped inline prompt | `ai path/to/dir "summarize architecture"` | Collects context from provided path arguments before one-shot model call. | [inline_prompt_mode.py](inline_prompt_mode.py), [inline_mode_renderer.py](inline_mode_renderer.py), [contextualizer.py](contextualizer.py) |
-| Read-only preview | `ai --read path/to/file.py --offset 400 --limit 200` | Prints bounded file slice and continuation hint if truncated. | [orchestrator.py](orchestrator.py), [contextualizer.py](contextualizer.py) |
-| Immediate sandboxed shell | `ai '!pytest -q'` | Executes guarded shell command without starting model conversation loop. | [orchestrator.py](orchestrator.py), [bash_executor.py](bash_executor.py) |
-| Self-upgrade | `ai -u` | Calls installer script to reinstall only when newer release is available. | [orchestrator.py](orchestrator.py), [install.sh](install.sh), [README.md](README.md) |
+| Flow | Invocation Example | Description | Key Sources | | --- | --- | --- |
+--- | | Interactive conversation | `ai` | Starts prompt loop (`💬 >`), runs
+Responses streaming, supports `help`, `new`, `v`, and in-chat `!command`. |
+[orchestrator.py](orchestrator.py), [ai_engine_main.py](ai_engine_main.py),
+[cli_renderer.py](cli_renderer.py) | | Inline one-shot | `ai "explain this
+repo"` | Single-request mode with no follow-up loop. |
+[inline_prompt_mode.py](inline_prompt_mode.py),
+[inline_mode_renderer.py](inline_mode_renderer.py) | | Scoped inline prompt |
+`ai path/to/dir "summarize architecture"` | Collects context from provided path
+arguments before one-shot model call. |
+[inline_prompt_mode.py](inline_prompt_mode.py),
+[inline_mode_renderer.py](inline_mode_renderer.py),
+[contextualizer.py](contextualizer.py) | | Read-only preview | `ai --read
+path/to/file.py --offset 400 --limit 200` | Prints bounded file slice and
+continuation hint if truncated. | [orchestrator.py](orchestrator.py),
+[contextualizer.py](contextualizer.py) | | Immediate sandboxed shell | `ai
+'!pytest -q'` | Executes guarded shell command without starting model
+conversation loop. | [orchestrator.py](orchestrator.py),
+[bash_executor.py](bash_executor.py) | | Self-upgrade | `ai -u` | Calls
+installer script to reinstall only when newer release is available. |
+[orchestrator.py](orchestrator.py), [install.sh](install.sh),
+[README.md](README.md) |
 
 ## 4. Architectural Components
 - **CLI entrypoint** – Thin wrapper that instantiates orchestrator and forwards argv. ([main.py](main.py))
