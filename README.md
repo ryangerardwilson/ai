@@ -19,7 +19,8 @@ and versioning.
 
 ## How is this better than OpenAI Codex / OpenCode?
 
-- No agentic detours. One model, one request, one response—no multi-agent theater.
+- Default mode avoids agentic detours: one model, one request, one response.
+- Optional orchestrator mode (`-o`) can spawn up to five tmux-backed musician sub-agents when you explicitly want parallel decomposition/synthesis.
 - Dog whistle control for mutating model tool calls in interactive chat: no whistle, no file mutation.
 - CLI-first on purpose. No TUI, no shortcut maze—inline mode and chat mode play nicely with tmux.
 - Low cognitive load. Minimal UI, fast startup, no persistent chat history beyond the session, so it stays as snappy as vanilla Vim.
@@ -84,9 +85,19 @@ python main.py
 - `ai path/to/dir '!pytest -q'` — run a sandboxed shell command with a scoped working directory.
 - `ai --read path/to/file.py --offset 400 --limit 200` — preview a file slice.
 - `ai -d` — enable debug logs.
+- `ai -o` — start orchestrator mode (tmux required) with musician sub-agents.
+- `ai -oc` — close all tmux panes in the current window except the current pane.
 - `ai -v` / `ai --version` / `ai -V` — show version.
 - `ai -u` / `ai --upgrade` — upgrade.
 - `ai -h` / `ai --help` — help.
+
+### Orchestrator mode (`-o`)
+
+- Requires tmux. If launched inside tmux, panes are created in the current session; otherwise `ai` creates a background session and prints how to attach.
+- User interacts only with the orchestrator pane; musician panes are treated as execution/log panes.
+- For execution-oriented tasks, the orchestrator clears excess panes, composes a fresh musician ensemble, dispatches assignments, then synthesizes output.
+- For "which agents should we spawn" discussions, the orchestrator treats the turn as planning-only and does not force spawning unless explicitly asked.
+- On `Ctrl+C`, orchestrator mode closes excess panes and exits with interrupt status.
 
 ### What you’ll see
 
@@ -103,12 +114,19 @@ python main.py
 - `unit_test_coverage` — one-shot `pytest --cov` runner for quick coverage spot checks.
 - `plan_update` (with legacy `update_plan`) — structured todo management so the assistant can publish, merge, and summarize task lists as work progresses.
 
+In orchestrator mode, additional tools are available for multi-agent flow:
+
+- `compose_ensemble`, `set_musician_mandates`, `dispatch_by_mandate`
+- `poll_assignments`, `wait_assignment`, `collect_assignment_result`
+- `cancel_assignment`, `synthesize_ensemble`, `list_musicians`, `reset_task_ensemble`
+
 As the assistant works you’ll see tool output in-line—diff previews, coverage
 summaries, plan updates—so every action stays transparent.
 
 ### Why a Single-Agent + Dog-Whistle Flow?
 
-- **One brain beats a committee.** Rather than juggling planner/builder/runner bots, a single assistant carries full context from plan to execution.
+- **Default one-brain workflow.** In standard mode, a single assistant carries full context from plan to execution.
+- **Orchestrator when needed.** `-o` is opt-in for tasks where multi-agent decomposition is helpful; otherwise you stay in the simpler single-agent flow.
 - **User-controlled execution.** Your dog whistle phrase (default `jfdi`, but feel free to use `ship it`, `make it so`, `hakuna matata`) is the explicit “go” signal for interactive, model-initiated mutations.
 - **Transparent guardrails.** When a mutating tool is blocked, the assistant tells you exactly why and reminds you of the phrase—no rummaging through agent logs.
 - **Easy to customize.** Teams can pick a phrase that fits their culture; set it once in config or via `DOG_WHISTLE` and keep the workflow playful *and* safe.
@@ -134,6 +152,10 @@ summaries, plan updates—so every action stays transparent.
 
 Prompt drafting in editor mode uses temporary files in `/tmp` and removes them
 on completion.
+
+Orchestrator runtime artifacts are ephemeral by default and stored under system
+temp (`/tmp/ai_orchestra/...`), then cleaned up when the orchestrator session
+ends.
 
 ---
 
