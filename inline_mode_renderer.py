@@ -32,6 +32,7 @@ class InlineModeRenderer:
         config: Dict[str, Any],
         default_model: str = "gpt-5-codex",
         enforce_mutation_for_edit_requests: bool = True,
+        stream_output: bool = False,
     ) -> None:
         self.renderer = renderer
         self.config = config
@@ -42,6 +43,8 @@ class InlineModeRenderer:
         self._debug_api = settings.debug_api
         self._debug_stream: TextIO = sys.stderr
         self._enforce_mutation_for_edit_requests = enforce_mutation_for_edit_requests
+        self._stream_output = stream_output
+        self._streamed_last_response = False
 
     def _api_debug(self, message: str) -> None:
         if self._debug_api:
@@ -194,9 +197,9 @@ class InlineModeRenderer:
                         "No file changes were applied. The model must call a mutating tool for edit requests."
                     )
                     return 1
-                if assistant_messages:
+                if assistant_messages and not self._streamed_last_response:
                     self.renderer.display_assistant_message(assistant_messages[-1])
-                else:
+                elif not self._streamed_last_response:
                     self.renderer.display_assistant_message("Done.")
                 return 0
 
@@ -206,7 +209,8 @@ class InlineModeRenderer:
                         "No file changes were applied. The model answered without using a mutating tool."
                     )
                     return 1
-                self.renderer.display_assistant_message(assistant_messages[-1])
+                if not self._streamed_last_response:
+                    self.renderer.display_assistant_message(assistant_messages[-1])
                 return 0
 
             self.renderer.display_error("Model returned no content.")
@@ -222,6 +226,7 @@ class InlineModeRenderer:
         system_prompt: str,
         conversation_items: List[Dict[str, Any]],
     ) -> Optional[Any]:
+        self._streamed_last_response = False
         self.renderer.start_loader()
         try:
             self._api_debug(
@@ -229,6 +234,48 @@ class InlineModeRenderer:
             )
             conversation_payload: Any = conversation_items
             tools_payload: Any = TOOL_DEFINITIONS
+            if self._stream_output:
+                response = None
+                stream_id = "inline:assistant:0"
+                stream_started = False
+                stream_buffer = ""
+                with self.client.responses.stream(
+                    model=model_id,
+                    instructions=system_prompt,
+                    input=conversation_payload,
+                    tools=tools_payload,
+                    tool_choice="auto",
+                ) as stream:
+                    for event in stream:
+                        event_type = getattr(event, "type", "")
+                        if event_type == "response.output_text.delta":
+                            delta = getattr(event, "delta", "")
+                            if not delta:
+                                continue
+                            if not stream_started:
+                                stream_started = True
+                                self.renderer.start_assistant_stream(stream_id)
+                            stream_buffer += delta
+                            self.renderer.update_assistant_stream(stream_id, delta)
+                        elif event_type == "response.output_text.done":
+                            final_text = getattr(event, "text", "") or stream_buffer
+                            if not stream_started:
+                                stream_started = True
+                                self.renderer.start_assistant_stream(stream_id)
+                            self.renderer.finish_assistant_stream(stream_id, final_text)
+                            self._streamed_last_response = bool(final_text)
+                        elif event_type == "response.completed":
+                            response = getattr(event, "response", None)
+
+                    if response is None:
+                        response = getattr(stream, "response", None) or getattr(
+                            stream, "final_response", None
+                        )
+                    if stream_started and not self._streamed_last_response:
+                        self.renderer.finish_assistant_stream(stream_id, stream_buffer)
+                        self._streamed_last_response = bool(stream_buffer)
+                return response
+
             response = self.client.responses.create(
                 model=model_id,
                 instructions=system_prompt,

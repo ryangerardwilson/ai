@@ -12,12 +12,13 @@ from inline_mode_renderer import InlineModeRenderer
 
 def run_assignment(*, prompt: str, scopes: list[Path], repo_root: Path) -> int:
     config = load_config()
-    renderer = CLIRenderer(show_reasoning=False)
+    renderer = CLIRenderer(show_reasoning=False, stream_assistant_in_non_tty=True)
     inline = InlineModeRenderer(
         renderer=renderer,
         config=config,
         default_model=resolve_model("inline", config, default_model=DEFAULT_MODEL),
         enforce_mutation_for_edit_requests=False,
+        stream_output=True,
     )
     return inline.run(prompt=prompt, scopes=scopes)
 

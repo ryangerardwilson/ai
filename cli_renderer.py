@@ -36,7 +36,11 @@ class CLIRenderer:
     NEW_CONVERSATION_TOKEN = "<<NEW_CONVERSATION>>"
 
     def __init__(
-        self, *, color_prefix: str = "\033[1;36m", show_reasoning: bool = True
+        self,
+        *,
+        color_prefix: str = "\033[1;36m",
+        show_reasoning: bool = True,
+        stream_assistant_in_non_tty: bool = False,
     ) -> None:
         self.color_prefix = color_prefix
         self._supports_color = sys.stdout.isatty()
@@ -46,6 +50,7 @@ class CLIRenderer:
         self._readline_prompt: str = ""
         self._completion_messages: List[str] = []
         self._show_reasoning = show_reasoning
+        self._stream_assistant_in_non_tty = stream_assistant_in_non_tty
         self._reasoning_buffers: dict[str, str] = {}
         self._active_reasoning: Optional[str] = None
         self._reasoning_line_len = 0
@@ -685,6 +690,8 @@ class CLIRenderer:
                 end="",
                 flush=True,
             )
+        elif self._stream_assistant_in_non_tty:
+            print("🤖 > ", end="", flush=True)
 
     def update_assistant_stream(self, stream_id: str, delta: str) -> None:
         self.stop_loader()
@@ -701,6 +708,8 @@ class CLIRenderer:
                     end="",
                     flush=True,
                 )
+            elif self._stream_assistant_in_non_tty:
+                print(delta, end="", flush=True)
 
     def finish_assistant_stream(
         self, stream_id: str, final_text: Optional[str] = None
@@ -717,7 +726,11 @@ class CLIRenderer:
                         end="",
                         flush=True,
                     )
+                elif self._stream_assistant_in_non_tty:
+                    print(missing, end="", flush=True)
         if self._supports_color and sys.stdout.isatty():
+            print()
+        elif self._stream_assistant_in_non_tty:
             print()
 
     def _edit_prompt_via_editor(self, seed_text: str) -> Optional[str]:
