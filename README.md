@@ -185,15 +185,16 @@ git tag v0.4.0
 git push origin v0.4.0
 ```
 
-GitHub Actions builds a PyInstaller bundle (`ai-linux-x64.tar.gz`), updates
-`_version.py`, and publishes the asset alongside the tagged release.
+GitHub Actions builds a PyInstaller bundle (`ai-linux-x64.tar.gz`), stamps the
+placeholder `_version.py` in the shipped artifact, and publishes the asset
+alongside the tagged release.
 
 ---
 
 ## Development
 
 - Requirements live in `requirements.txt`.
-- `_version.py` carries the runtime version string; the release workflow overwrites it during tagged builds.
+- `_version.py` carries the runtime version string; the checked-in value stays a placeholder and the release workflow overwrites it during tagged builds.
 - Run `python main.py -h` to view the CLI summary from source.
 - `ai_engine.py` hosts the core orchestration (context gathering, tool dispatch, Responses loop) and can be reused by future UIs.
 - `cli_renderer.py` implements the current terminal UX; alternative renderers (TUI, GUI) can plug into the same engine.
