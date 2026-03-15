@@ -24,10 +24,6 @@ from inline_prompt_mode import parse_inline_prompt, run_inline_prompt
 from orchestra_mode import run_orchestra_cleanup, run_orchestra_mode
 
 
-INSTALL_SH_URL = "https://raw.githubusercontent.com/ryangerardwilson/ai/main/install.sh"
-PRIMARY_FLAG_SET = {"-h", "--help", "-v", "--version", "-V", "-u", "--upgrade"}
-
-
 class Orchestrator:
     def __init__(self) -> None:
         self.config = load_config()
@@ -56,10 +52,6 @@ class Orchestrator:
     # ------------------------------------------------------------------
     def run(self, argv: Iterable[str]) -> int:
         arg_list = list(argv)
-
-        primary_rc = self._handle_primary_flags(arg_list)
-        if primary_rc is not None:
-            return primary_rc
 
         shell_invocation = self._detect_shell_invocation(arg_list)
         if shell_invocation is not None:
@@ -382,88 +374,6 @@ class Orchestrator:
             sys.exit(1)
 
     # ------------------------------------------------------------------
-    # Flag handling
-    # ------------------------------------------------------------------
-    def _handle_primary_flags(self, args: list[str]) -> Optional[int]:
-        if not args:
-            return None
-
-        if not set(args).issubset(PRIMARY_FLAG_SET):
-            return None
-
-        try:
-            show_help, show_version, do_upgrade = self._parse_primary_flags(args)
-        except ValueError as exc:
-            self.renderer.display_error(str(exc))
-            return 1
-
-        if show_help:
-            self._print_help()
-            return 0
-        if show_version:
-            try:
-                from _version import __version__  # type: ignore
-            except Exception:  # pragma: no cover - fallback
-                __version__ = "0.0.0"
-            self.renderer.display_info(__version__)
-            return 0
-        if do_upgrade:
-            return self._run_upgrade()
-
-        return 0
-
-    @staticmethod
-    def _parse_primary_flags(argv: Iterable[str]) -> tuple[bool, bool, bool]:
-        show_help = show_version = do_upgrade = False
-        for arg in argv:
-            if arg in {"-h", "--help"}:
-                show_help = True
-            elif arg in {"-v", "--version", "-V"}:
-                show_version = True
-            elif arg in {"-u", "--upgrade"}:
-                do_upgrade = True
-            else:
-                raise ValueError(f"Unknown flag '{arg}'")
-
-        if sum((show_help, show_version, do_upgrade)) > 1:
-            raise ValueError("Flags -h, -v, and -u cannot be combined")
-        return show_help, show_version, do_upgrade
-
-    def _run_upgrade(self) -> int:
-        try:
-            curl = subprocess.Popen(
-                ["curl", "-fsSL", INSTALL_SH_URL],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-        except FileNotFoundError:
-            self.renderer.display_error("Upgrade requires curl")
-            return 1
-
-        try:
-            bash = subprocess.Popen(["bash", "-s", "--", "-u"], stdin=curl.stdout)
-            if curl.stdout is not None:
-                curl.stdout.close()
-        except FileNotFoundError:
-            self.renderer.display_error("Upgrade requires bash")
-            curl.terminate()
-            curl.wait()
-            return 1
-
-        bash_rc = bash.wait()
-        curl_rc = curl.wait()
-        if curl_rc != 0:
-            stderr = (
-                curl.stderr.read().decode("utf-8", errors="replace")
-                if curl.stderr
-                else ""
-            )
-            if stderr:
-                self.renderer.display_error(stderr)
-            return curl_rc
-        return bash_rc
-
-    # ------------------------------------------------------------------
     # CLI support
     # ------------------------------------------------------------------
     def _parse_args(self, argv: list[str]) -> argparse.Namespace:
@@ -558,24 +468,6 @@ class Orchestrator:
                 f"ai --read {rel_target} --offset {next_offset} --limit {safe_limit}"
             )
         return 0
-
-    # ------------------------------------------------------------------
-    # Utilities
-    # ------------------------------------------------------------------
-    @staticmethod
-    def _print_help() -> None:
-        print(
-            "ai - Codex-style terminal assistant\n\n"
-            "Usage:\n"
-            "  ai              Start an interactive session\n"
-            "  ai 'question'   Run a one-shot inline prompt\n"
-            "  ai PATH 'q'     Run an inline prompt scoped to PATH\n"
-            "  ai '!command'   Run a sandboxed shell command immediately\n"
-            "  ai --read PATH  Preview a file slice\n"
-            "  ai -h           Show this help\n"
-            "  ai -v           Show installed version\n"
-            "  ai -u           Reinstall the latest release if a newer version exists"
-        )
 
     @staticmethod
     def _resolve_color(candidate: Optional[str] = None) -> str:

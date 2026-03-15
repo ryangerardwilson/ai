@@ -62,6 +62,7 @@ jobs:
               "$PYBIN" -m pip install --only-binary=:all: pyinstaller
               echo "__version__ = \"${VERSION}\"" > _version.py
               "$PYBIN" -m PyInstaller --clean --onedir --name ai main.py
+              cp install.sh dist/ai/
               tar -C dist -czf ai-linux-x64.tar.gz ai
 
             '

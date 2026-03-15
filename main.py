@@ -2,34 +2,61 @@
 
 from __future__ import annotations
 
-import os
-import shlex
-import subprocess
 import sys
-from typing import Optional
 
 from config_paths import get_config_path
+from _version import __version__
 from orchestrator import Orchestrator
+from rgw_cli_contract import AppSpec, resolve_install_script_path, run_app
 
 
-def _open_config_in_editor() -> int:
-    config_path = get_config_path()
-    config_path.parent.mkdir(parents=True, exist_ok=True)
-    if not config_path.exists():
-        config_path.write_text("{}\n", encoding="utf-8")
-    editor = (os.environ.get("VISUAL") or os.environ.get("EDITOR") or "vim").strip()
-    editor_cmd = shlex.split(editor) if editor else ["vim"]
-    if not editor_cmd:
-        editor_cmd = ["vim"]
-    return subprocess.run([*editor_cmd, str(config_path)], check=False).returncode
+INSTALL_SCRIPT = resolve_install_script_path(__file__)
+HELP_TEXT = """ai
+
+flags:
+  ai -h
+    show this help
+  ai -v
+    print the installed version
+  ai -u
+    upgrade to the latest release
+  ai conf
+    open the config in $VISUAL/$EDITOR
+
+features:
+  start the interactive coding assistant
+  # ai
+  ai
+
+  ask a one-shot question against files or a repo path
+  # ai path/to/file.py "what does this do"
+  ai path/to/file.py "what does this do"
+
+  start orchestrator mode with tmux-backed sub-agents
+  # ai -o "implement the feature"
+  ai -o "implement the feature"
+"""
 
 
-def main(argv: Optional[list[str]] = None) -> int:
-    args = sys.argv[1:] if argv is None else argv
-    if args == ["conf"]:
-        return _open_config_in_editor()
+def _dispatch(argv: list[str]) -> int:
     orchestrator = Orchestrator()
-    return orchestrator.run(args)
+    return orchestrator.run(argv)
+
+
+APP_SPEC = AppSpec(
+    app_name="ai",
+    version=__version__,
+    help_text=HELP_TEXT,
+    install_script_path=INSTALL_SCRIPT,
+    no_args_mode="dispatch",
+    config_path_factory=get_config_path,
+    config_bootstrap_text="{}\n",
+)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = list(sys.argv[1:] if argv is None else argv)
+    return run_app(APP_SPEC, args, _dispatch)
 
 
 if __name__ == "__main__":
