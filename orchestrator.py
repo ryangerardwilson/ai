@@ -473,7 +473,4 @@ class Orchestrator:
     def _resolve_color(candidate: Optional[str] = None) -> str:
         if candidate:
             return candidate
-        env_color = os.environ.get("AI_COLOR")
-        if env_color:
-            return env_color
-        return "\033[1;36m"
+        return ""

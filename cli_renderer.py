@@ -26,19 +26,19 @@ except ImportError:  # pragma: no cover - readline absent on some platforms
 class CLIRenderer:
     """Console renderer for the ai CLI."""
 
-    ANSI_WHITE = "\033[97m"
-    ANSI_LIGHT_GRAY = "\033[38;5;250m"
-    ANSI_MEDIUM_GRAY = "\033[38;5;245m"
-    ANSI_DIM_GRAY = "\033[90m"
-    ANSI_DARKER_GRAY = "\033[38;5;240m"
-    ANSI_REASONING = "\033[38;5;242m"
-    ANSI_RESET = "\033[0m"
+    ANSI_WHITE = ""
+    ANSI_LIGHT_GRAY = ""
+    ANSI_MEDIUM_GRAY = ""
+    ANSI_DIM_GRAY = ""
+    ANSI_DARKER_GRAY = ""
+    ANSI_REASONING = ""
+    ANSI_RESET = ""
     NEW_CONVERSATION_TOKEN = "<<NEW_CONVERSATION>>"
 
     def __init__(
         self,
         *,
-        color_prefix: str = "\033[1;36m",
+        color_prefix: str = "",
         show_reasoning: bool = True,
         stream_assistant_in_non_tty: bool = False,
     ) -> None:
@@ -534,7 +534,7 @@ class CLIRenderer:
         )
 
     def _colorize(self, text: str, color: str) -> str:
-        if not text or not self._supports_color:
+        if not text or not self._supports_color or not color:
             return text
         return f"{color}{text}{self.ANSI_RESET}"
 
